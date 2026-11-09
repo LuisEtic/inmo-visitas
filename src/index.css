@@ -20,7 +20,7 @@
   --color-info: #2563eb;
 
   /* Tipografía */
-  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-sans: 'Inter Variable', 'Inter', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
   /* Escala tipográfica (tamaño / interlineado) */
