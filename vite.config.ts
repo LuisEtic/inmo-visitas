@@ -5,6 +5,8 @@ import { defineConfig } from 'vite'
 
 // https://vite.dev/config/
 export default defineConfig({
+  // GitHub Pages sirve el repo en /inmo-visitas/, no en la raíz.
+  base: '/inmo-visitas/',
   plugins: [
     react(),
     tailwindcss(),

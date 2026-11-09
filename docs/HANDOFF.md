@@ -100,3 +100,10 @@ Historial de entregas por fase. Un bloque por fase, en orden.
 - URL de preview con pasos para probar: no hay URL pública en esta
   fase (proyecto de código en disco, no artefacto web). En local:
   `npm install`, `npm run dev` y abrir `http://localhost:5173/design-system`.
+
+---
+## Nota de despliegue (Fase 1, sin cambio de fase)
+
+- Se añadió `.github/workflows/deploy.yml` para publicar `dist/` en GitHub Pages en cada push a `main`.
+- Ajuste necesario para Pages: `base: '/inmo-visitas/'` en Vite y ruta `/design-system` reconocida también como subpath (`endsWith`). Sin este ajuste los assets en `/assets/...` darían 404 en Pages.
+- La etiqueta `v0.1-fase-1` sigue en el commit de la Fase 1; este cambio es infra de despliegue, no una fase nueva.

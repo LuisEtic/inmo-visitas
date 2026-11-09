@@ -6,7 +6,12 @@ import DesignSystem from './pages/DesignSystem'
  * de negocio en esta fase.
  */
 function App() {
-  if (window.location.pathname === '/design-system') {
+  const pathname = window.location.pathname
+  const isDesignSystem =
+    pathname === '/design-system' ||
+    pathname.endsWith('/design-system') ||
+    pathname.endsWith('/design-system/')
+  if (isDesignSystem) {
     return <DesignSystem />
   }
 
@@ -20,7 +25,7 @@ function App() {
         Fase 1 — Fundación: modelo de datos + sistema de diseño Minimal-Mono.
       </p>
       <a
-        href="/design-system"
+        href={`${import.meta.env.BASE_URL}design-system`}
         className="mt-4 inline-block rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white"
       >
         Ver sistema de diseño
