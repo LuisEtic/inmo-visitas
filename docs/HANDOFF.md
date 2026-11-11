@@ -565,3 +565,178 @@ Cambios (aprobados por Luis el 2026-11-11):
   (recarga en `/inmo-visitas/clientes/<id>`). Quedan datos de prueba de Muse
   en el Supabase de pruebas (V-52 de A, V-52 y V-18 de B, nota de visita
   sobre David Romero).
+
+---
+
+## HANDOFF FASE 4
+
+- Hecho: captura por voz y texto + transcripción. Pantalla `/capturar`
+  (elegir cliente con buscador, elegir inmueble disponible/reservado con
+  casilla «Mostrar vendidos», cliente provisional rápido con
+  `is_temporary = true`, pestañas Voz/Texto, grabación con MediaRecorder
+  de hasta 3 minutos con contador `0:00 / 3:00`, aviso «Graba tu resumen
+  al salir de la visita, no la conversación con el cliente», reproductor
+  del blob y «Volver a grabar»). Nota de texto → `transcribed` y
+  navegación a `/notas/:id`; nota de voz → insert en `draft`, subida a
+  Storage con `upsert: false`, `audio_url` con la ruta y navegación a
+  `/notas/:id`; si la subida falla, el audio se conserva y el botón
+  «Reintentar subida» reutiliza la misma nota (no se crea una segunda).
+  Ficha `/notas/:id` (cliente con enlace y badge «Provisional», inmueble
+  con enlace, fecha en español, estado «Pendiente de transcribir» /
+  «Transcrita», audio con URL firmada de 5 minutos, transcripción
+  automática una sola vez al abrir un `draft` con audio, «Reintentar
+  transcripción» si falla, corrección del texto a mano hasta 5.000
+  caracteres, «No encontrado» si el id es de otro agente o no existe,
+  botón «Nueva captura»). «Capturar» en `PrivateNav` y botón principal
+  «Capturar visita» en Inicio. Funciones puras en
+  `src/features/capture/audio.ts` con tests de Vitest (tipo MIME,
+  extensión, `m:ss`, validación 10–5.000 caracteres). Edge Function
+  `transcribe` (Deno): CORS solo para localhost:5173, localhost:4173 y
+  luisetic.github.io; JWT verificado por Supabase; cliente con clave
+  anon + cabecera `Authorization` (RLS como ese agente, sin
+  `service_role`); 404 si la nota no es del agente, 400 si no tiene
+  audio, 200 con la transcripción existente si ya está transcrita,
+  413 si el audio supera 10 MB, 502 genérico en español si falta
+  algún secret o falla el proveedor (sin devolver su mensaje ni
+  escribir transcripción, audio o clave en los logs); proveedor por
+  secrets `TRANSCRIBE_API_URL`, `TRANSCRIBE_MODEL` y
+  `TRANSCRIBE_API_KEY`, sin valores por defecto en el código.
+- Tablas/columnas/políticas creadas o cambiadas: **solo la migración
+  `0006_storage_audio_visitas.sql`** (idempotente, comentada en
+  español). Bucket privado `visit-audio` (`file_size_limit` 10 MB,
+  `allowed_mime_types` audio/webm, audio/mp4, audio/ogg, audio/mpeg,
+  audio/wav) y 3 políticas en `storage.objects` solo para
+  `authenticated` y solo para ese bucket, con la carpeta del agente
+  como primer segmento (`(storage.foldername(name))[1] =
+  auth.uid()::text`): `visit_audio_select_own`, `visit_audio_insert_own`,
+  `visit_audio_delete_own`. Sin política para `anon` y sin update.
+  Archivo `docs/deploy/supabase-fase-4.sql` con solo la 0006 (0001–0005
+  sin tocar). **La 0006 NO está aplicada en Supabase todavía: la aplica
+  Luis en el SQL Editor** (ver «Cómo probarlo»).
+- RLS / Edge Functions activas: las 8 tablas sin cambios. `transcribe`
+  **NO está desplegada**: la despliega Luis desde el panel (Via Editor,
+  ver `supabase/functions/README.md`). Sin `service_role` en el cliente
+  ni en la función.
+- Rutas/pantallas nuevas (todas privadas, `lazy`, dentro de
+  `RequireAuth`): `/capturar` (sin parámetros; lección de la Fase 3: la
+  ruta estática no usa `useParams`) y `/notas/:id` (ficha montada con
+  `key = id`, mismo patrón que `ClientDetail`/`PropertyDetail`).
+  `<Button asChild><Link/></Button>` en los botones que son enlaces.
+  Móvil primero: una columna, objetivos táctiles ≥ 44 px, sin
+  desbordamiento a 360 px (por diseño; pendiente de comprobar en
+  navegador).
+- Dependencias nuevas: **ninguna de producción**. Sin Deno instalado
+  en esta máquina: `deno check supabase/functions/transcribe/index.ts`
+  no se pudo ejecutar (queda pendiente en la revisión).
+- Errores o warnings de build: `npm test` — 53 pruebas en 5 archivos,
+  todas en verde (31 previas + 22 nuevas de `audio.ts`); `npx tsc
+  --noEmit` sin errores; `npm run build` sin errores en base `/` y con
+  `VITE_BASE_PATH=/inmo-visitas/`; `npm run lint` (oxlint) 0 errores y
+  2 warnings, los previos de shadcn (`button.tsx` y `badge.tsx`).
+  Trozo JS mayor: **255 kB** (`vendor-react`), por debajo de 500 kB.
+  `dist/404.html` copiado de `dist/index.html` en la build de Pages.
+- Navegadores y móviles probados: **ninguno** — esta fase no se pudo
+  probar en el navegador (el constructor no opera el navegador; lección
+  de la Fase 3 aplicada así: todo lo verificable por API y tests está
+  probado; lo de navegador queda documentado pantalla por pantalla en
+  «Supuestos tomados o pendientes»). Micrófono no probado en ningún
+  dispositivo real.
+- Supuestos tomados o pendientes:
+  - **BLOQUEADO POR LUIS (0006 sin aplicar):** la subida de audio a
+    `visit-audio` falla con «Bucket not found» (comprobado por API como
+    A); sin bucket no se puede probar la voz de extremo a extremo, ni
+    la política de Storage de B en la carpeta de A (el listado como B
+    devuelve 0 objetos, sin bucket no prueba la política), ni la URL
+    firmada. Desbloqueo: pegar `docs/deploy/supabase-fase-4.sql` en el
+    SQL Editor y comprobar con `select id, public from
+    storage.buckets where id = 'visit-audio'` → `visit-audio | false`.
+  - **BLOQUEADO POR LUIS (`transcribe` sin desplegar):** invocar la
+    función con y sin JWT devuelve «Edge Function returned a non-2xx
+    status code» (función inexistente). Sin desplegar no se puede
+    probar la transcripción real, el 404 con el JWT de B sobre la nota
+    de A, el 401 sin JWT ni el 502 con el proveedor caído. Desbloqueo:
+    Supabase → Edge Functions → Deploy a new function → Via Editor,
+    nombre `transcribe`, pegar `supabase/functions/transcribe/index.ts`
+    (los tres secrets ya están creados). Después, en `/notas/<id de la
+    nota de voz>` la transcripción debe lanzarse sola.
+  - **Pendiente de navegador (padre + Luis):** `/capturar` completa
+    (búsqueda de cliente/inmueble, cliente provisional, pestañas,
+    grabación, contador, parada a los 3:00, reproductor del blob,
+    guardado de texto y de voz, reintento de subida); `/notas/:id`
+    (audio con URL firmada, «Transcribiendo…», corrección y su
+    persistencia, «No encontrado» como B); 360 px sin desbordamiento
+    ni errores de consola, en local y en Pages. Voz en **móvil real**
+    (Android con Chrome y, si es posible, iPhone con Safari): grabar,
+    escuchar, guardar y comprobar que la nota pasa a «Transcrita» y
+    que el audio está en `visit-audio/<id de A>/<id de la nota>.<ext>`.
+  - La validación de longitud del texto (10–5.000) es solo de
+    frontend (Zod): la base no la restringe, igual que en la Fase 3
+    con el contacto.
+  - `audio_url` guarda solo la ruta; el reproductor de la ficha usa
+    URL firmada de 5 minutos. El `agent_id` de la ruta de Storage es
+    el `session.user.id`, solo como segmento de la ruta (lo permite el
+    prompt); la nota en sí no envía `agent_id`.
+  - Sin Deno en esta máquina: la función no pasó `deno check`; la
+    sintaxis sigue los patrones de Supabase Edge Functions (Deno.serve,
+    `jsr:@supabase/supabase-js@2`, `npm:zod@4`).
+- Cómo probarlo (en vivo contra el proyecto de pruebas, 2026-11-11,
+  con la clave anon; agentes de prueba
+  pluton2408+agente-a@hotmail.com y pluton2408+agente-b@hotmail.com;
+  las contraseñas NO se escriben aquí, como en la Fase 2):
+  - **Primero Luis:** pegar `docs/deploy/supabase-fase-4.sql` en el
+    SQL Editor (comprobación: `select id, public from
+    storage.buckets where id = 'visit-audio'` → `visit-audio |
+    false`); desplegar `transcribe` (Via Editor, nombre `transcribe`,
+    pegar `supabase/functions/transcribe/index.ts`).
+  - Criterio 1 ✅ (API): A crea la nota de texto del ejemplo (Ana
+    García + V-18, id `e0782f7c-8409-4e23-a2b0-5972521fed0a`):
+    `input_type = text`, `status = transcribed`, `raw_text` exacto,
+    `audio_url` null, `agent_id` puesto por la base. Pendiente de
+    repetir por la UI en `/capturar` y verla en `/notas/<id>`.
+  - Criterio 2 ✅ (tests): texto de menos de 10 caracteres o vacío no
+    se guarda y lo explica en español (`audio.test.ts`); sin
+    cliente/inmueble el botón «Guardar nota» está desactivado (por
+    diseño; pendiente de navegador).
+  - Criterio 3 ⏳ bloqueado: voz de extremo a extremo pendiente de la
+    0006, del despliegue y de un móvil real (ver arriba).
+  - Criterio 4 ⏳ pendiente de navegador: sin permiso de micrófono, el
+    mensaje es «Permite el micrófono para grabar. También puedes
+    escribir la nota.» y la pestaña «Texto» sigue funcionando.
+  - Criterio 5 ✅ (API): cliente provisional «Marta (la del lunes)»
+    creado sin teléfono (id `15d60343-1a2d-4280-a688-71eb839132e8`,
+    `is_temporary = true`) y nota enlazada a Marta + V-31 (id
+    `d91d1785-dd9e-415e-9106-5f227152c25b`). Pendiente de ver el badge
+    «Provisional» en `/clientes` y de repetirlo por la UI en
+    `/capturar`.
+  - Criterio 6 ✅ (API): corregir el `raw_text` de la nota de ejemplo
+    persiste tras releer (y se restauró el texto original). Pendiente
+    de repetirlo con la transcripción de una nota de voz en el
+    navegador.
+  - Criterio 7 ⚠️ parcial (API): B no ve la nota de A por id (null =
+    «No encontrado») ni puede modificarla (0 filas). La parte de
+    Storage y de `transcribe` (404 con JWT de B, 401 sin JWT) está
+    bloqueada por la 0006 y el despliegue (ver arriba).
+  - Criterio 8 ⏳ bloqueado: 502 sin clave o con el proveedor caído,
+    pendiente del despliegue (después se prueba quitando el secret
+    temporalmente o con el proveedor caído).
+  - Criterio 9 ✅: la clave no aparece en el repo, en `dist/`, en el
+    HANDOFF ni en la red del navegador: `gsk_` 0 ocurrencias en todo
+    el repo; `TRANSCRIBE` 0 archivos en `dist/`; el frontend solo
+    llama a `functions.invoke('transcribe', …)` y nunca ve los
+    secrets; en el código solo aparecen los NOMBRES de los secrets
+    (`Deno.env.get(…)`), sin valores.
+  - Criterio 10 ✅: `npm test` 53/53, `npx tsc --noEmit` sin errores,
+    `npm run build` sin errores en ambas bases, `npm run lint` 0
+    errores (2 warnings previos de shadcn), trozo mayor 255 kB.
+    `deno check` no ejecutado (sin Deno).
+  - Criterio 11 ⏳ pendiente: cada pantalla nueva probada en el
+    navegador, a 360 px y sin errores de consola, en local y en
+    Pages (lo hace el padre con el navegador real y Luis en el
+    móvil).
+  - Datos de prueba que QUEDAN en el proyecto: nota de texto de
+    ejemplo (Ana + V-18, id `e0782f7c-…`), cliente provisional Marta
+    (la del lunes) + su nota (V-31, id `d91d1785-…`). Además, de la
+    Fase 3: V-52 de A, V-52 y V-18 de B, y la nota de prueba sobre
+    David Romero (V-12, draft). El borrador de voz de prueba creado
+    para comprobar la subida se borró tras la prueba. No se borraron
+    las cuentas de prueba.

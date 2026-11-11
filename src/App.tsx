@@ -14,6 +14,8 @@ const Clients = lazy(() => import('./pages/Clients'))
 const ClientDetail = lazy(() => import('./pages/ClientDetail'))
 const Properties = lazy(() => import('./pages/Properties'))
 const PropertyDetail = lazy(() => import('./pages/PropertyDetail'))
+const Capture = lazy(() => import('./pages/Capture'))
+const NoteDetail = lazy(() => import('./pages/NoteDetail'))
 
 function PageFallback() {
   return (
@@ -103,6 +105,22 @@ function App() {
               element={
                 <RequireAuth>
                   <PropertyDetail />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/capturar"
+              element={
+                <RequireAuth>
+                  <Capture />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/notas/:id"
+              element={
+                <RequireAuth>
+                  <NoteDetail />
                 </RequireAuth>
               }
             />

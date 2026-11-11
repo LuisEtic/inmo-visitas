@@ -72,6 +72,48 @@ export type AgentRow = {
   created_at: string
 }
 
+export type VisitNoteStatus = 'draft' | 'transcribed' | 'extracted' | 'reviewed' | 'approved'
+
+export type VisitNoteInputType = 'audio' | 'text'
+
+/**
+ * Nota de visita (Fase 4). `client_id` y `property_id` son no nulos
+ * desde la migración 0005. `audio_url` guarda la RUTA del objeto en
+ * Storage (`<agent_id>/<visit_note_id>.<ext>`), nunca una URL pública;
+ * para escuchar el audio se pide una URL firmada de 5 minutos.
+ * `transcribed` significa «hay texto listo para la extracción» (la
+ * Fase 5 leerá `coalesce(transcript, raw_text)`).
+ */
+export type VisitNoteRow = {
+  id: string
+  agent_id: string | null
+  client_id: string
+  property_id: string
+  input_type: VisitNoteInputType
+  audio_url: string | null
+  raw_text: string | null
+  transcript: string | null
+  status: VisitNoteStatus
+  created_at: string
+}
+
+export type VisitNoteInsert = {
+  client_id: string
+  property_id: string
+  input_type: VisitNoteInputType
+  audio_url?: string | null
+  raw_text?: string | null
+  transcript?: string | null
+  status?: VisitNoteStatus
+}
+
+export type VisitNoteUpdate = {
+  audio_url?: string | null
+  raw_text?: string | null
+  transcript?: string | null
+  status?: VisitNoteStatus
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -99,6 +141,12 @@ export interface Database {
           full_name?: string
           phone?: string | null
         }
+        Relationships: []
+      }
+      visit_notes: {
+        Row: VisitNoteRow
+        Insert: VisitNoteInsert
+        Update: VisitNoteUpdate
         Relationships: []
       }
     }

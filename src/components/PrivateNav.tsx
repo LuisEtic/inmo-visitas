@@ -3,9 +3,10 @@ import { Button } from './ui/button'
 import { useAuth } from '../lib/auth-context'
 
 /**
- * Barra de navegación de las rutas privadas (Fase 3): Inicio, Clientes,
- * Inmuebles y Perfil, más el cierre de sesión. Objetivos táctiles de 44 px
- * como mínimo; en móvil los enlaces pasan a dos filas si hace falta.
+ * Barra de navegación de las rutas privadas (Fase 3, «Capturar» en
+ * Fase 4): Inicio, Capturar, Clientes, Inmuebles y Perfil, más el
+ * cierre de sesión. Objetivos táctiles de 44 px como mínimo; en móvil
+ * los enlaces pasan a dos filas si hace falta.
  */
 export function PrivateNav() {
   const { signOut } = useAuth()
@@ -29,6 +30,16 @@ export function PrivateNav() {
           }
         >
           Inicio
+        </NavLink>
+        <NavLink
+          to="/capturar"
+          className={({ isActive }) =>
+            `inline-flex min-h-11 items-center rounded-md px-3 text-sm font-semibold ${
+              isActive ? 'text-text-primary underline' : 'text-text-secondary'
+            }`
+          }
+        >
+          Capturar
         </NavLink>
         <NavLink
           to="/clientes"

@@ -8,8 +8,8 @@ import { supabase } from '../lib/supabase'
 
 /**
  * / (privada, inicio): saludo al agente y enlaces a las secciones de
- * trabajo: Clientes, Inmuebles, Perfil y sistema de diseño. La captura de
- * notas llega en la Fase 4.
+ * trabajo: Capturar, Clientes, Inmuebles, Perfil y sistema de diseño.
+ * La captura de notas llega en la Fase 4.
  */
 export default function Home() {
   const { user, supabaseConfigured, signOut } = useAuth()
@@ -52,7 +52,7 @@ export default function Home() {
       <PrivateNav />
       <main className="mx-auto max-w-4xl bg-bg px-4 py-12 text-text-primary">
         <p className="font-mono text-xs text-text-secondary">
-          inmo-visitas · Fase 3
+          inmo-visitas · Fase 4
         </p>
         <h1 className="mt-2 text-2xl">Hola, {displayName ?? fallbackName}</h1>
         <p className="mt-2 text-base text-text-secondary">
@@ -66,6 +66,12 @@ export default function Home() {
         )}
 
         <div className="mt-6 flex flex-wrap gap-4">
+          <Link
+            to="/capturar"
+            className="inline-block min-h-11 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white"
+          >
+            Capturar visita
+          </Link>
           <Link
             to="/clientes"
             className="inline-block min-h-11 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white"
@@ -100,8 +106,8 @@ export default function Home() {
         </div>
 
         <p className="mt-6 text-sm text-text-secondary">
-          Fase 3 — CRUD de clientes e inmuebles + contacto. La captura de
-          notas llega en la Fase 4.
+          Fase 4 — Captura por voz y texto + transcripción. La extracción
+          de datos llega en la Fase 5.
         </p>
       </main>
     </>
