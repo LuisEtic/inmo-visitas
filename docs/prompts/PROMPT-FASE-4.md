@@ -50,7 +50,8 @@ Storage + Edge Functions) + Zod + react-router 8 + Vitest. Lee antes
    tiene aún al cliente dado de alta (decisión del 2026-11-11).
 3. **Audio en Supabase Storage**, en un bucket privado con políticas por
    agente (migración 0006).
-4. **Edge Function `transcribe`**: transcribe el audio con OpenAI Whisper,
+4. **Edge Function `transcribe`**: transcribe el audio con Whisper (en pruebas,
+   Groq `whisper-large-v3-turbo`; proveedor configurable por *secrets*),
    usando el JWT del agente (RLS se aplica también dentro de la función).
 5. **Ficha mínima de la nota** (`/notas/:id`): ver la nota, escuchar el
    audio, corregir la transcripción y reintentar si falló.
@@ -67,8 +68,8 @@ Storage + Edge Functions) + Zod + react-router 8 + Vitest. Lee antes
 - No enviar `agent_id` desde el frontend (lo pone la base y RLS lo
   comprueba).
 - **Nunca** `service_role`, ni en el cliente ni en la Edge Function. La
-  clave de OpenAI solo como *secret* de Edge Functions (`OPENAI_API_KEY`),
-  nunca en `.env`, en el repo ni en el HANDOFF.
+  clave del proveedor de transcripción solo como *secret* de Edge Functions
+  (`TRANSCRIBE_API_KEY`), nunca en `.env`, en el repo ni en el HANDOFF.
 - Sin cola offline ni IndexedDB (Fase 9), sin grabar la conversación con el
   cliente, sin subir archivos de audio desde el disco, sin dependencias
   nuevas de producción (MediaRecorder es nativo).
@@ -191,20 +192,29 @@ Idempotente (se puede reaplicar), comentada en español:
      llamada).
   3. Descargar el audio de Storage con ese mismo cliente (RLS de 0006).
      Si pesa más de 10 MB → 413.
-  4. Llamar a `https://api.openai.com/v1/audio/transcriptions`
-     (`multipart/form-data`: `file`, `model=whisper-1`, `language=es`,
-     `response_format=json`) con `Authorization: Bearer
-     ${Deno.env.get('OPENAI_API_KEY')}`. Tiempo máximo 60 s.
+  4. Llamar al proveedor con la API de transcripción compatible con OpenAI:
+     `POST ${TRANSCRIBE_API_URL}` (`multipart/form-data`: `file`,
+     `model=${TRANSCRIBE_MODEL}`, `language=es`, `response_format=json`) con
+     `Authorization: Bearer ${TRANSCRIBE_API_KEY}`. Tiempo máximo 60 s.
+     Los tres valores se leen con `Deno.env.get(...)` de los *secrets* de
+     Supabase (ya creados por Luis), sin valores por defecto en el código:
+     - Pruebas (Groq): `TRANSCRIBE_API_URL` =
+       `https://api.groq.com/openai/v1/audio/transcriptions`,
+       `TRANSCRIBE_MODEL` = `whisper-large-v3-turbo`.
+     - Después (OpenAI u otro compatible): cambiar solo los *secrets*
+       (p. ej. `https://api.openai.com/v1/audio/transcriptions` y
+       `whisper-1`), sin tocar el código.
   5. Guardar `transcript` y `status = 'transcribed'` con `update` (RLS).
   6. Responder 200 `{ "transcript": "..." }`.
-- Errores: si falta `OPENAI_API_KEY` o OpenAI falla → 502 `{ "error":
+- Errores: si falta alguno de los tres *secrets* o el proveedor falla → 502 `{ "error":
   "No se ha podido transcribir. Inténtalo de nuevo." }` y la nota se queda en
-  `draft`. Nunca devolver al cliente el mensaje original de OpenAI ni
+  `draft`. Nunca devolver al cliente el mensaje original del proveedor ni
   escribir en los logs la transcripción, el audio o la clave.
 - Llamada desde el frontend: `supabase.functions.invoke('transcribe', {
   body: { visit_note_id } })` en `src/features/notes/api.ts`.
 - Actualiza `supabase/functions/README.md`: qué hace `transcribe`, el
-  secret `OPENAI_API_KEY` y cómo desplegarla **sin CLI** (Supabase →
+  los *secrets* `TRANSCRIBE_API_URL`, `TRANSCRIBE_MODEL` y
+  `TRANSCRIBE_API_KEY` y cómo desplegarla **sin CLI** (Supabase →
   Edge Functions → *Deploy a new function* → *Via Editor*, nombre
   `transcribe`, pegar `index.ts`) y con CLI (`supabase functions deploy
   transcribe`).
@@ -244,8 +254,9 @@ Idempotente (se puede reaplicar), comentada en español:
 ## DESPLIEGUE
 
 - **Luis** (o Muse con su permiso): pegar `docs/deploy/supabase-fase-4.sql`
-  en el SQL Editor; crear el secret `OPENAI_API_KEY` en Supabase → Edge
-  Functions → Secrets; desplegar `transcribe`. Muse nunca ve ni escribe la
+  en el SQL Editor; los *secrets* `TRANSCRIBE_API_URL`,
+  `TRANSCRIBE_MODEL` y `TRANSCRIBE_API_KEY` en Supabase → Edge Functions →
+  Secrets (ya creados con Groq el 2026-11-11); desplegar `transcribe`. Muse nunca ve ni escribe la
   clave.
 - Pages, igual que en la Fase 3 (directorio temporal → `gh-pages`, nunca
   `git checkout --orphan` en el worktree principal). El micrófono exige
@@ -273,10 +284,11 @@ Idempotente (se puede reaplicar), comentada en español:
    (prueba con `supabase.storage.from('visit-audio')` desde la consola o
    un script con la clave anon: error o 0 objetos); `transcribe` con el JWT
    de B sobre la nota de A → 404; sin JWT → 401.
-8. Sin `OPENAI_API_KEY` (o con OpenAI caído) → 502 con el mensaje en
+8. Sin `TRANSCRIBE_API_KEY` (o con el proveedor caído) → 502 con el mensaje en
    español, nota en `draft` y «Reintentar transcripción» funciona después.
-9. La clave de OpenAI no aparece en el repo, en `dist/`, en el HANDOFF ni
-   en la red del navegador (solo viaja de la Edge Function a OpenAI).
+9. La clave de transcripción no aparece en el repo, en `dist/`, en el
+   HANDOFF ni en la red del navegador (solo viaja de la Edge Function al
+   proveedor).
 10. `npm test` (con los tests nuevos de `audio.ts`), `npx tsc --noEmit`,
     `npm run build` y `npm run lint` sin errores (los 2 avisos previos de
     shadcn se aceptan) y ningún trozo JS > 500 kB. Si tienes Deno,
