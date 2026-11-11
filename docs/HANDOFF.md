@@ -317,3 +317,59 @@ Historial de entregas por fase. Un bloque por fase, en orden.
   devuelve 0 filas; con la sesión del agente B no se ven ni se pueden
   modificar datos del agente A; probar el enlace mágico en local y en
   Pages, al final de todo).
+
+---
+## Ajustes post-Fase 2 (revisión de Claude, sin cambio de fase)
+
+Revisión del 2026-11-11 (`42a06c5..491a75d`, desde el merge del PR #1), en Claude Code:
+`npm ci`, `tsc --noEmit`, `npm run build` (bases `/` y `/inmo-visitas/`) y
+`npm run lint` sin errores (2 avisos previos de shadcn). Migraciones
+ejecutadas en PostgreSQL 16 temporal con esquema `auth` simulado: 0003+0004
+sobre 0001+0002 (dos veces, idempotentes) y el SQL concatenado en base
+vacía: 30 políticas, RLS en 8 tablas, 7 índices. Prueba negativa en SQL:
+anon ve 0 filas; B no ve, edita ni borra filas de A, ni inserta con el
+`agent_id` de A, ni crea notas sobre inmuebles de A, ni `drafts` o
+`extracted_facts` sobre notas de A. Cuadra con la prueba en vivo de Muse.
+
+Cambios (aprobados por Luis: puntos 2, 4, 5, 6 y 7 de la revisión):
+
+- **Migración nueva `0005_ajustes_revision_fase_2.sql`** (0001–0004 sin
+  tocar; se puede reaplicar). En el proyecto de pruebas, pegar SOLO la 0005
+  en el SQL Editor.
+  - `properties.reference` única **por agente**: se elimina
+    `properties_reference_key` y se crea
+    `properties_agent_reference_key unique (agent_id, reference)`. Antes,
+    B no podía crear su propio «V-18» y el error de duplicado revelaba la
+    existencia de la referencia de A.
+  - `agents.email` de solo lectura en la base: `revoke update on agents
+    from anon, authenticated` + `grant update (full_name, phone) on agents
+    to authenticated`. /perfil ya solo envía esos dos campos.
+  - `visit_notes.client_id` y `property_id` pasan a `not null` (las
+    políticas ya lo exigían). Si en la captura (Fase 4) no se conoce al
+    cliente, se crea un cliente provisional (`is_temporary = true`).
+  - Reclamo de demo de una sola vez: tabla `public.demo_seed_claim` (una
+    fila como máximo, RLS activa sin políticas, sin permisos para anon ni
+    authenticated) y `handle_new_agent()` reescrita con
+    `insert … on conflict do nothing` + `if found`. Ya no repite el
+    reclamo si se borran todos los agentes ni falla con dos altas
+    simultáneas. Si ya hay agentes al aplicar la 0005, se marca como
+    reclamado. Para volver a probar el reclamo en un proyecto de pruebas:
+    borrar los agentes, poner `agent_id = null` en clients y properties y
+    `delete from public.demo_seed_claim`. SOLO DEMO — eliminar antes de
+    producción (tabla + bloque del trigger).
+- `docs/deploy/supabase-hasta-fase-2.sql` ahora incluye 0001–0005.
+- **Code-splitting**: páginas con `React.lazy` + `Suspense` en
+  `src/App.tsx` y grupos `vendor-react`, `vendor-supabase` y `vendor` en
+  `vite.config.ts` (`build.rolldownOptions.output.codeSplitting`). Trozo
+  mayor: 255 kB (antes, uno solo de 612 kB); desaparece el aviso de 500 kB.
+- Verificado tras los cambios: 0005 aplicada sobre una base con 0001–0004
+  y datos (dos veces), 0001–0005 por orden y el concatenado en vacío.
+  Pruebas nuevas: B crea su «V-18»; A no puede duplicar su «V-18»; A edita
+  nombre y teléfono pero cambiar el email da `permission denied`; nota sin
+  cliente rechazada; tras borrar todos los agentes, un alta nueva no
+  reclama la demo. Navegador (Chromium, build de preview) en `/` y en
+  `/inmo-visitas/`: /login, /registro y /design-system se pintan; / y
+  /perfil redirigen a /login; sin errores de consola ni 404.
+- Sin cambiar (decisión de Luis): los emails de prueba del HANDOFF se
+  mantienen mientras duren las pruebas. Criterio 5 (enlace mágico):
+  verificado en Pages el 2026-11-11 (commit 5abb997); Fase 2 cerrada.

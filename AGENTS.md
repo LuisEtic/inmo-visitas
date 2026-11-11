@@ -1,6 +1,7 @@
 # AGENTS.md — inmo-visitas
 
-Normas del proyecto. Leer antes de tocar código.
+Normas del proyecto. Leer antes de tocar código, junto con
+`docs/ESTADO.md` (fuente de verdad: fase en curso, decisiones y pendientes).
 
 ## Stack
 
@@ -17,10 +18,14 @@ Normas del proyecto. Leer antes de tocar código.
 - `src/integrations/crm/` — un adaptador por CRM y una interfaz común
   `CrmAdapter` (`src/integrations/crm/types.ts`). Añadir un CRM = añadir un
   adaptador, sin tocar el resto.
-- SQL en `supabase/migrations/`, numerado (`0001_...`, `0002_...`).
+- SQL en `supabase/migrations/`, numerado (`0001_...`, `0002_...`). Nunca
+  modificar una migración ya aplicada: los cambios van en una nueva.
 - Edge Functions en `supabase/functions/` (una carpeta por función).
 - Sistema de diseño Minimal-Mono: tokens en `src/index.css` (`@theme` de
   Tailwind). No introducir otros colores, fuentes ni radios fuera de los tokens.
+- `docs/ESTADO.md` — estado del proyecto. `docs/HANDOFF.md` — un bloque por
+  fase. `docs/prompts/PROMPT-FASE-N.md` — el prompt de cada fase (léelo
+  entero antes de empezar la fase).
 
 ## Seguridad / secretos
 
@@ -38,11 +43,14 @@ Normas del proyecto. Leer antes de tocar código.
 
 ## Estado
 
+- El estado vivo está en `docs/ESTADO.md`. Resumen:
 - Fase 1: fundación — modelo de datos + sistema de diseño. Cerrada
   (tag `v0.1-fase-1`). GitHub Pages es staging temporal (probar y demos);
   producción irá a Hostinger con Coolify. `VITE_BASE_PATH` configurable:
   la misma build sirve en `/` y en `/inmo-visitas/`.
-- Fase 2 (esta): acceso e identidad de agentes + RLS por agente
-  (adelantada desde la Fase 8 por decisión de Luis, 2026-11-11).
-  Captura es Fase 4; lista de borradores, Fase 6. Prompts de la fase
-  guardados en `docs/prompts/`.
+- Fase 2: acceso e identidad de agentes + RLS por agente (tag
+  `v0.2-fase-2`), cerrada (16/16) y revisada por Claude con ajustes
+  (migración 0005).
+- Fase 3 (siguiente, solo cuando Luis lo pida): CRUD de clientes e
+  inmuebles + contacto. Prompt en `docs/prompts/PROMPT-FASE-3.md`.
+- Captura es la Fase 4; lista de borradores, la Fase 6.
