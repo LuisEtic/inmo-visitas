@@ -33,6 +33,13 @@ const priceField = z.string().transform((raw, ctx) => {
 
 export const PROPERTY_STATUSES: PropertyStatus[] = ['disponible', 'reservado', 'vendido']
 
+/** Texto visible de cada estado (lista y ficha usan el mismo). */
+export const PROPERTY_STATUS_LABELS: Record<PropertyStatus, string> = {
+  disponible: 'Disponible',
+  reservado: 'Reservado',
+  vendido: 'Vendido',
+}
+
 export const propertyFormSchema = z.object({
   reference: z
     .string()

@@ -40,7 +40,7 @@ describe('normalizePhone', () => {
   })
 
   it('cualquier otra cosa → error «Teléfono no válido»', () => {
-    for (const raw of ['', '12345', '512345678', '61234567', '6123456789', '+34', '0034', 'abc', '+34 612 345']) {
+    for (const raw of ['', '12345', '512345678', '61234567', '6123456789', '+34', '0034', 'abc', '+34 612 345', '+34123456789', '0034512345678']) {
       expect(() => normalizePhone(raw)).toThrow('Teléfono no válido')
     }
   })

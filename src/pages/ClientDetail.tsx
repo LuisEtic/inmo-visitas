@@ -24,10 +24,17 @@ import type { ClientFormValues } from '../features/clients/schema'
  * 0 filas y no se distingue entre los dos casos.
  */
 export default function ClientDetail() {
+  // /clientes/nuevo es una ruta estática sin `:id`: ahí `id` es undefined.
+  // La `key` fuerza un montaje nuevo al pasar de «nuevo» a la ficha creada
+  // (o de una ficha a otra), para no arrastrar el estado anterior.
   const { id } = useParams<{ id: string }>()
+  return <ClientDetailView key={id ?? 'nuevo'} id={id} />
+}
+
+function ClientDetailView({ id }: { id: string | undefined }) {
   const { supabaseConfigured } = useAuth()
   const navigate = useNavigate()
-  const isNew = id === 'nuevo'
+  const isNew = id === undefined
 
   const [client, setClient] = useState<ClientRow | null>(null)
   const [loading, setLoading] = useState(!isNew)
@@ -39,7 +46,7 @@ export default function ClientDetail() {
   const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
-    if (isNew || id === undefined) {
+    if (id === undefined) {
       return
     }
     let mounted = true
@@ -126,11 +133,9 @@ export default function ClientDetail() {
             <p className="mt-2 text-sm text-text-secondary">
               Este cliente no existe o no es tuyo.
             </p>
-            <Link to="/clientes" className="mt-4 inline-block">
-              <Button variant="secondary" size="lg">
-                Volver a clientes
-              </Button>
-            </Link>
+            <Button asChild variant="secondary" size="lg" className="mt-4">
+              <Link to="/clientes">Volver a clientes</Link>
+            </Button>
           </div>
         )}
 

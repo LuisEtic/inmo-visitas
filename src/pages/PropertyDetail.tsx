@@ -15,13 +15,10 @@ import {
   removeProperty,
   updateProperty,
 } from '../features/properties/api'
-import type { PropertyFormValues } from '../features/properties/schema'
-
-const STATUS_LABELS: Record<string, string> = {
-  disponible: 'Disponible',
-  reservado: 'Reservado',
-  vendido: 'Vendido',
-}
+import {
+  PROPERTY_STATUS_LABELS,
+  type PropertyFormValues,
+} from '../features/properties/schema'
 
 /**
  * /inmuebles/nuevo y /inmuebles/:id (privadas): el mismo formulario para
@@ -32,10 +29,17 @@ const STATUS_LABELS: Record<string, string> = {
  * los dos casos.
  */
 export default function PropertyDetail() {
+  // /inmuebles/nuevo es una ruta estática sin `:id`: ahí `id` es undefined.
+  // La `key` fuerza un montaje nuevo al pasar de «nuevo» a la ficha creada
+  // (o de una ficha a otra), para no arrastrar el estado anterior.
   const { id } = useParams<{ id: string }>()
+  return <PropertyDetailView key={id ?? 'nuevo'} id={id} />
+}
+
+function PropertyDetailView({ id }: { id: string | undefined }) {
   const { supabaseConfigured } = useAuth()
   const navigate = useNavigate()
-  const isNew = id === 'nuevo'
+  const isNew = id === undefined
 
   const [property, setProperty] = useState<PropertyRow | null>(null)
   const [loading, setLoading] = useState(!isNew)
@@ -47,7 +51,7 @@ export default function PropertyDetail() {
   const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
-    if (isNew || id === undefined) {
+    if (id === undefined) {
       return
     }
     let mounted = true
@@ -138,11 +142,9 @@ export default function PropertyDetail() {
             <p className="mt-2 text-sm text-text-secondary">
               Este inmueble no existe o no es tuyo.
             </p>
-            <Link to="/inmuebles" className="mt-4 inline-block">
-              <Button variant="secondary" size="lg">
-                Volver a inmuebles
-              </Button>
-            </Link>
+            <Button asChild variant="secondary" size="lg" className="mt-4">
+              <Link to="/inmuebles">Volver a inmuebles</Link>
+            </Button>
           </div>
         )}
 
@@ -172,7 +174,7 @@ export default function PropertyDetail() {
             <div>
               <p className="text-sm text-text-secondary">Estado</p>
               <p className="mt-1">
-                <Badge variant={property.status}>{STATUS_LABELS[property.status]}</Badge>
+                <Badge variant={property.status}>{PROPERTY_STATUS_LABELS[property.status]}</Badge>
               </p>
             </div>
             <div>
