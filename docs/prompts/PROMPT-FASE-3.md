@@ -24,8 +24,8 @@ React 19 + Vite 8 + TypeScript estricto + Tailwind v4 + shadcn/ui + Supabase
 - Fase 2 (`v0.2-fase-2`): Supabase Auth (contraseña, enlace mágico, registro,
   cierre de sesión), trigger de alta en `agents` con reclamo de la demo para
   el primer agente, /perfil, rutas con `basename`, RLS por agente en las 8
-  tablas (30 políticas, sin políticas para `anon`). Prueba en vivo: 15/16 (el
-  enlace mágico está pendiente de probar).
+  tablas (30 políticas, sin políticas para `anon`). Prueba en vivo: 16/16,
+  enlace mágico incluido (commit 5abb997).
 - **Ajustes de la revisión de la Fase 2 (PR de Claude, migración 0005):**
   - `properties.reference` es única **por agente**: constraint
     `properties_agent_reference_key unique (agent_id, reference)`.

@@ -1,6 +1,6 @@
 # ESTADO — Inmo Visitas (piloto de la skill app-mvp)
 Última actualización: 2026-11-11 (revisión de la Fase 2 + migración a Claude Code, en Claude Code)
-Etapa actual: 5 · Bucle por fase   ·   Fase de construcción: 2 de 9 entregada y revisada (falta el enlace mágico) · Fase 3 con prompt listo, sin empezar
+Etapa actual: 5 · Bucle por fase   ·   Fase de construcción: 2 de 9 cerrada (16/16, revisada) · Fase 3 con prompt listo, empieza al aprobar el PR #2
 Constructor: Muse (chat, Git en su espacio → GitHub)   ·   Repo: https://github.com/LuisEtic/inmo-visitas (PÚBLICO, necesario para GitHub Pages gratis)
 Staging actual: https://luisetic.github.io/inmo-visitas/ (rama `gh-pages`, despliegue manual de Muse)   ·   Producción: Hostinger VPS + Coolify
 Entorno de trabajo de Claude: **Claude Code** desde la revisión de la Fase 2. Este archivo (`docs/ESTADO.md` en el repo) es la fuente de verdad; el proyecto de Claude.ai «APP INMO VISITAS» se archiva tras el PR de migración.
@@ -29,6 +29,7 @@ Entorno de trabajo de Claude: **Claude Code** desde la revisión de la Fase 2. E
 - 2026-11-11 — Supabase de pruebas creado por Luis.
 - 2026-11-11 — **Aprobada la migración del sistema a Claude Code.** Se hará junto con la revisión de la Fase 2 (no antes).
 - 2026-11-11 — Revisión de la Fase 2 en Claude Code: OK. Ajustes aprobados por Luis (puntos 2, 4, 5, 6 y 7): migración 0005 (`properties.reference` única por agente, `agents.email` de solo lectura en la base, `visit_notes.client_id`/`property_id` not null, reclamo de demo de una sola vez) y code-splitting. Se mantienen los emails de prueba en el HANDOFF mientras duren las pruebas.
+- 2026-11-11 — Fase 2 cerrada: enlace mágico verificado en la web viva (16/16).
 - 2026-11-11 — Una nota de visita siempre lleva cliente e inmueble; si en la captura no se conoce al cliente, se crea uno provisional (`is_temporary`).
 - 2026-11-11 — Fase 3 sin migración nueva: CRUD sobre el esquema actual, «contacto» = datos de contacto normalizados + enlaces `tel:`/`mailto:` que abre el agente (WhatsApp queda en la Fase 7). *Pendiente de confirmar por Luis.*
 
@@ -43,7 +44,7 @@ Entorno de trabajo de Claude: **Claude Code** desde la revisión de la Fase 2. E
 | Fase | Título | Estado | Tag | Revisión Claude | PR |
 |---|---|---|---|---|---|
 | 1 | Fundación: modelo de datos + diseño minimal-mono | Cerrada (desplegada en Pages, commit b075d2e) | v0.1-fase-1 | OK: esquema verificado en PostgreSQL, build verde | #1 aprobado |
-| 2 | Acceso / identidad de agentes + RLS por agente | Entregada por Muse (prueba en vivo 15/16); falta el enlace mágico (criterio 5) | v0.2-fase-2 | OK con ajustes (11 nov., Claude Code): migraciones en PostgreSQL 16 por los dos caminos, prueba negativa de RLS, navegador en `/` y `/inmo-visitas/` | #2 (ajustes + migración, pendiente de aprobar) |
+| 2 | Acceso / identidad de agentes + RLS por agente | Cerrada: 16/16, enlace mágico verificado en Pages el 11 nov. (commit 5abb997) | v0.2-fase-2 | OK con ajustes (11 nov., Claude Code): migraciones en PostgreSQL 16 por los dos caminos, prueba negativa de RLS, navegador en `/` y `/inmo-visitas/` | #2 (ajustes + migración, pendiente de aprobar) |
 | 3 | CRUD clientes, inmuebles y contacto | Prompt listo (`docs/prompts/PROMPT-FASE-3.md`); empieza cuando Luis lo pida y tras aprobar el PR | — | — | — |
 | 4 | Captura: voz PWA (audio sí) + texto + transcripción | Pendiente | — | — | — |
 | 5 | Extracción con evidencia + revisión/aprobación | Pendiente | — | — | — |
@@ -53,7 +54,7 @@ Entorno de trabajo de Claude: **Claude Code** desde la revisión de la Fase 2. E
 | 9 | Pulido: PWA, móvil y resiliencia | Pendiente | — | — | — |
 
 ## Revisión prevista de la Fase 2 (cuando Muse entregue)
-*Hecha el 2026-11-11: todo OK salvo el enlace mágico, que sigue pendiente. Detalle en `docs/HANDOFF.md` → «Ajustes post-Fase 2».*
+*Hecha el 2026-11-11: todo OK. Enlace mágico verificado por Luis en Pages (~13:42, commit 5abb997); en local no se repitió, se acepta porque es el mismo código con `emailRedirectTo` = origin + base. Detalle en `docs/HANDOFF.md` → «Ajustes post-Fase 2».*
 - `git diff v0.1-fase-1..HEAD`; `npm ci`, `tsc`, `build`, `lint`.
 - Migraciones 0003+0004 sobre 0001+0002 en PostgreSQL temporal con esquema `auth` simulado; y el SQL concatenado en base vacía.
 - RLS: `agent_id = auth.uid()`; insert/update de `visit_notes` exige cliente e inmueble del mismo agente; `tasks` con `visit_note_id` nulo o del mismo agente; tablas hijas vía `visit_notes`.
@@ -65,7 +66,6 @@ Entorno de trabajo de Claude: **Claude Code** desde la revisión de la Fase 2. E
 
 ## Pendientes y riesgos abiertos
 - Repo público: el código de un producto marca blanca queda visible. Pasar staging a Coolify (auto-deploy + preview por PR) y volver a privado como tarde antes de enseñarlo a clientes reales o antes de la Fase 8.
-- **Enlace mágico (criterio 5 de la Fase 2):** pendiente; lo prueba Muse cuando se libere el límite de 2 emails/h de Supabase. La Fase 2 se da por cerrada cuando pase.
 - **Aplicar la 0005 en el Supabase de pruebas** (Luis, SQL Editor: pegar solo `supabase/migrations/0005_ajustes_revision_fase_2.sql`) tras aprobar el PR y antes de la Fase 3.
 - Emails de prueba en `docs/HANDOFF.md` (repo público): quitarlos al terminar las pruebas de la Fase 2. Seguirán en el historial de Git salvo que se reescriba.
 - Reclamo de datos de demo (`demo_seed_claim` + bloque del trigger de alta): eliminar antes de producción.

@@ -372,4 +372,4 @@ Cambios (aprobados por Luis: puntos 2, 4, 5, 6 y 7 de la revisión):
   /perfil redirigen a /login; sin errores de consola ni 404.
 - Sin cambiar (decisión de Luis): los emails de prueba del HANDOFF se
   mantienen mientras duren las pruebas. Criterio 5 (enlace mágico):
-  pendiente, lo prueba Muse cuando se libere el límite de emails.
+  verificado en Pages el 2026-11-11 (commit 5abb997); Fase 2 cerrada.

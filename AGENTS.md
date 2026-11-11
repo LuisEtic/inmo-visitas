@@ -49,8 +49,8 @@ Normas del proyecto. Leer antes de tocar código, junto con
   producción irá a Hostinger con Coolify. `VITE_BASE_PATH` configurable:
   la misma build sirve en `/` y en `/inmo-visitas/`.
 - Fase 2: acceso e identidad de agentes + RLS por agente (tag
-  `v0.2-fase-2`), revisada por Claude con ajustes (migración 0005).
-  Pendiente solo la prueba del enlace mágico (criterio 5).
+  `v0.2-fase-2`), cerrada (16/16) y revisada por Claude con ajustes
+  (migración 0005).
 - Fase 3 (siguiente, solo cuando Luis lo pida): CRUD de clientes e
   inmuebles + contacto. Prompt en `docs/prompts/PROMPT-FASE-3.md`.
 - Captura es la Fase 4; lista de borradores, la Fase 6.
