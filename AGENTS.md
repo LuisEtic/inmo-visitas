@@ -38,6 +38,11 @@ Normas del proyecto. Leer antes de tocar código.
 
 ## Estado
 
-- Fase 1 (esta): fundación — modelo de datos + sistema de diseño.
-  Sin autenticación, sin RLS (planificada para la Fase 8), sin CRUD
-  interactivo, sin IA ni grabación de audio, sin Edge Functions.
+- Fase 1: fundación — modelo de datos + sistema de diseño. Cerrada
+  (tag `v0.1-fase-1`). GitHub Pages es staging temporal (probar y demos);
+  producción irá a Hostinger con Coolify. `VITE_BASE_PATH` configurable:
+  la misma build sirve en `/` y en `/inmo-visitas/`.
+- Fase 2 (esta): acceso e identidad de agentes + RLS por agente
+  (adelantada desde la Fase 8 por decisión de Luis, 2026-11-11).
+  Captura es Fase 4; lista de borradores, Fase 6. Prompts de la fase
+  guardados en `docs/prompts/`.

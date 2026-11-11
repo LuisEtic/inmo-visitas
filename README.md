@@ -37,9 +37,11 @@ quedan accesibles sin restricción, de forma intencional y temporal.
 
 ## Fases
 
-- **Fase 1** (esta): fundación — modelo de datos + sistema de diseño
+- **Fase 1**: fundación — modelo de datos + sistema de diseño
   Minimal-Mono. Sin auth, sin CRUD, sin IA ni audio, sin Edge Functions.
-- Fases 2–9: solo cuando Luis lo pida. Ver `docs/HANDOFF.md`.
+- **Fase 2** (esta): acceso e identidad de agentes + RLS por agente.
+  Sin CRUD de clientes/inmuebles, sin captura, sin IA ni Edge Functions.
+- Fases 3–9: solo cuando Luis lo pida. Captura es la Fase 4. Ver `docs/HANDOFF.md`.
 
 ## Comandos
 

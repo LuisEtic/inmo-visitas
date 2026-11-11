@@ -117,3 +117,172 @@ Historial de entregas por fase. Un bloque por fase, en orden.
 - Manifest PWA: `start_url` y `scope` usan la misma ruta base (antes `start_url: '/'` rompía la app instalada en subcarpeta); `lang: 'es'`.
 - Fuentes autoalojadas con Fontsource (`@fontsource-variable/inter`, `@fontsource/jetbrains-mono` 400/600). Eliminado Google Fonts por RGPD (transferencia de la IP del visitante).
 - Verificado: `tsc -b` y `npm run build` sin errores en raíz y en subcarpeta; lint con los 2 avisos previos de shadcn (no bloqueantes).
+
+---
+
+## HANDOFF FASE 2
+
+- Hecho: acceso e identidad de agentes + seguridad básica (RLS por
+  agente), adelantada desde la Fase 8 por decisión de Luis (2026-11-11).
+  Captura NO es esta fase: es la Fase 4 (audio en Fase 4, lista de
+  borradores en Fase 6). Supabase Auth real: registro con email +
+  contraseña, login con email + contraseña, enlace mágico y cierre de
+  sesión. Perfil de agente en /perfil (ver y editar full_name y phone,
+  email de solo lectura). react-router en modo declarativo con
+  `basename={import.meta.env.BASE_URL}` (instalado en esta fase:
+  react-router 8.5.1; no estaba en el proyecto). Rutas públicas /login,
+  /registro, /design-system; privadas / y /perfil, con redirección a
+  /login y vuelta a la ruta pedida tras entrar. RLS activada en las 8
+  tablas (detalle con el SQL exacto abajo). Migraciones nuevas 0003
+  (trigger) y 0004 (RLS); 0001 y 0002 sin tocar. Archivo
+  `docs/deploy/supabase-hasta-fase-2.sql` (0001–0004 concatenadas, solo
+  para proyecto nuevo y vacío). Prompts de la fase guardados en
+  `docs/prompts/` (original de Claude y corregido, con la cabecera
+  actualizada: reorden confirmado, Captura = Fase 4, Pages como staging
+  temporal y producción en Hostinger/Coolify). GitHub Pages es STAGING
+  TEMPORAL (probar y demos), no hosting permanente; `VITE_BASE_PATH`
+  sigue configurable para servir en `/` y en `/inmo-visitas/`.
+- Migraciones nuevas y políticas RLS creadas (SQL exacto de cada
+  política, en `supabase/migrations/0004_rls_por_agente.sql`):
+  - `alter table public.{agents,clients,properties,visit_notes,extracted_facts,tasks,drafts,crm_exports} enable row level security;`
+  - `alter table public.{clients,properties,visit_notes,tasks} alter column agent_id set default auth.uid();`
+  - agents (sin insert ni delete; el insert lo hace el trigger):
+    - `agents_select_own`: `for select to authenticated using (id = auth.uid())`
+    - `agents_update_own`: `for update to authenticated using (id = auth.uid()) with check (id = auth.uid())`
+  - clients / properties (las cuatro operaciones, `agent_id = auth.uid()`):
+    - `clients_select_own` / `properties_select_own`: `for select to authenticated using (agent_id = auth.uid())`
+    - `clients_insert_own` / `properties_insert_own`: `for insert to authenticated with check (agent_id = auth.uid())`
+    - `clients_update_own` / `properties_update_own`: `for update to authenticated using (agent_id = auth.uid()) with check (agent_id = auth.uid())`
+    - `clients_delete_own` / `properties_delete_own`: `for delete to authenticated using (agent_id = auth.uid())`
+  - visit_notes (las cuatro operaciones; en insert y update el cliente y
+    el inmueble enlazados deben ser del mismo agente — corrección de la
+    revisión, aplicada también al update):
+    - `visit_notes_select_own`: `for select to authenticated using (agent_id = auth.uid())`
+    - `visit_notes_insert_own`: `for insert to authenticated with check (agent_id = auth.uid() and exists (select 1 from public.clients c where c.id = client_id and c.agent_id = auth.uid()) and exists (select 1 from public.properties p where p.id = property_id and p.agent_id = auth.uid()))`
+    - `visit_notes_update_own`: `for update to authenticated using (agent_id = auth.uid()) with check (agent_id = auth.uid() and exists (select 1 from public.clients c where c.id = client_id and c.agent_id = auth.uid()) and exists (select 1 from public.properties p where p.id = property_id and p.agent_id = auth.uid()))`
+    - `visit_notes_delete_own`: `for delete to authenticated using (agent_id = auth.uid())`
+  - tasks (las cuatro operaciones; visit_note_id null o de nota propia):
+    - `tasks_select_own`: `for select to authenticated using (agent_id = auth.uid())`
+    - `tasks_insert_own`: `for insert to authenticated with check (agent_id = auth.uid() and (visit_note_id is null or exists (select 1 from public.visit_notes v where v.id = visit_note_id and v.agent_id = auth.uid())))`
+    - `tasks_update_own`: `for update to authenticated using (agent_id = auth.uid()) with check (agent_id = auth.uid() and (visit_note_id is null or exists (select 1 from public.visit_notes v where v.id = visit_note_id and v.agent_id = auth.uid())))`
+    - `tasks_delete_own`: `for delete to authenticated using (agent_id = auth.uid())`
+  - extracted_facts / drafts / crm_exports (las cuatro operaciones, vía
+    la nota de visita): `for {select,insert,update,delete} to authenticated using (exists (select 1 from public.visit_notes v where v.id = visit_note_id and v.agent_id = auth.uid()))` (en update, el mismo `exists` también en `with check`). Nombres: `extracted_facts_{select,insert,update,delete}_own`, `drafts_{select,insert,update,delete}_own`, `crm_exports_{select,insert,update,delete}_own`.
+  - Ninguna política para `anon`: sin sesión, todas las consultas
+    devuelven 0 filas.
+  - Índices: `clients_agent_id_idx`, `properties_agent_id_idx`,
+    `visit_notes_agent_id_idx`, `tasks_agent_id_idx`,
+    `extracted_facts_visit_note_id_idx`, `drafts_visit_note_id_idx`,
+    `crm_exports_visit_note_id_idx` (todos `create index if not exists`).
+  - Total: 30 políticas (2 agents + 16 clients/properties/
+    visit_notes/tasks + 12 extracted_facts/drafts/crm_exports).
+- Triggers / Edge Functions / server functions activas:
+  - Trigger `on_auth_user_created` (`after insert on auth.users, for
+    each row, execute function public.handle_new_agent()`), en
+    `supabase/migrations/0003_auth_agents_trigger.sql`. Función
+    `public.handle_new_agent()` con `security definer` y
+    `set search_path = public`: inserta en `public.agents`
+    `(id = new.id, email = new.email, full_name = coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)))`.
+    Reclamo de demo: SOLO SI no existe ningún otro agente
+    (`count(*) = 1` en `public.agents`, contando la fila recién
+    insertada), asigna el `agent_id` del nuevo agente a las filas de
+    `clients` y `properties` con `agent_id IS NULL`. Comentario SQL en
+    mayúsculas: «SOLO DEMO — ELIMINAR ANTES DE PRODUCCIÓN».
+  - Edge Functions: ninguna (no se crea ninguna en esta fase).
+- Rutas y pantallas nuevas (públicas y privadas):
+  - Públicas: `/login` (email + contraseña, enlace «Entrar con enlace
+    mágico», enlace a /registro), `/registro` (nombre completo, email,
+    contraseña mínimo 8 caracteres, nombre en
+    `options.data.full_name`), `/design-system` (sin cambios).
+  - Privadas (redirigen a /login sin sesión y vuelven a la ruta pedida
+    tras entrar): `/` (inicio provisional: «Hola, \<nombre\>», enlaces
+    a /perfil y /design-system, botón «Cerrar sesión») y `/perfil`
+    (ver y editar full_name y phone; email de solo lectura).
+  - Ruta desconocida redirige a `/` (que exige sesión).
+  - `AuthProvider` (`src/components/AuthProvider.tsx`) con
+    `onAuthStateChange` y estado de carga sin parpadeo de /login;
+    `RequireAuth` (`src/components/RequireAuth.tsx`) como guarda de
+    rutas privadas. `signInWithOtp` y `signUp` pasan
+    `emailRedirectTo = window.location.origin + import.meta.env.BASE_URL`
+    (sin eso Supabase volvería a la Site URL = localhost aunque el
+    enlace se abra desde Pages).
+  - Validación con Zod y mensajes de error en español (credenciales
+    incorrectas, email ya registrado, enlace enviado). Si la
+    confirmación de email está activa, /registro muestra «Revisa tu
+    correo para confirmar la cuenta» (por defecto Supabase permite 2
+    emails/hora).
+  - Componentes nuevos: `src/components/ui/input.tsx` y
+    `src/components/ui/label.tsx` (shadcn; Label necesita
+    `@radix-ui/react-label` 2.1.17, instalado en esta fase). Solo tokens
+    Minimal-Mono y componentes Button/Badge existentes.
+  - Sin Supabase configurado (sin .env), las pantallas muestran el
+    aviso «Falta configurar Supabase (.env)» en lugar de fallar.
+- Errores o warnings de build (estado de tsc/lint): `npx tsc --noEmit`
+  exit 0 sin errores; `npm run build` exit 0 sin errores, en base `/`
+  y en base `/inmo-visitas/` (assets bajo `/inmo-visitas/assets/...`,
+  manifest con `start_url` y `scope` en `/inmo-visitas/`, `lang: 'es'`);
+  `npm run lint` (oxlint) 2 warnings y 0 errores, los 2 previos de
+  shadcn (button/badge exportan variantes); los 2 avisos nuevos de
+  `setState` en efecto que aparecieron al crear AuthProvider y Profile
+  se corrigieron inicializando el estado de carga con su valor final.
+  Aviso nuevo de Vite (no bloqueante): el chunk JS supera 500 kB tras
+  minificar (612 kB, Supabase + react-router); no se ha hecho
+  code-splitting en esta fase.
+  Preview local del build de Pages: HTTP 200 en `/inmo-visitas/`,
+  `/inmo-visitas/login`, `/inmo-visitas/registro`,
+  `/inmo-visitas/perfil` y `/inmo-visitas/design-system`.
+- Supuestos tomados o pendientes:
+  - **Prueba de Auth en vivo PENDIENTE.** No se ha probado registro,
+    login, enlace mágico, reclamo de demo ni prueba negativa contra el
+    proyecto real: las migraciones 0003 y 0004 NO están aplicadas en el
+    proyecto de pruebas (con la clave anon no se puede aplicar DDL).
+    Queda pendiente de que Luis pegue
+    `docs/deploy/supabase-hasta-fase-2.sql` en el SQL Editor de un
+    proyecto nuevo y vacío, o 0003+0004 sobre una base con 0001+0002, y
+    de que Argo (el agente padre) haga después la prueba en vivo. Los
+    criterios de aceptación 1–5 del prompt no están verificados en vivo.
+  - **Confirmación de email sin verificar.** No se sabe si «Confirm
+    email» está activo en el proyecto de pruebas ni si usa SMTP propio.
+    El código cubre los dos casos (sesión inmediata o mensaje «Revisa
+    tu correo para confirmar la cuenta»), y el HANDOFF debe documentar
+    cómo se probó cuando se haga la prueba en vivo. El correo por
+    defecto de Supabase permite 2 emails/hora.
+  - **SQL verificado por lectura, no por ejecución.** No hay Postgres
+    local en esta máquina para ejecutar las migraciones (ni `psql` ni
+    Docker). La sintaxis sigue los mismos patrones que 0001 (verificada
+    igual en Fase 1) y los conteos cuadran (8 tablas, 30 políticas, 7
+    índices, trigger + función). La primera ejecución real será la de
+    Luis en el SQL Editor.
+  - **.env local creado** con la URL y la clave anon del proyecto de
+    pruebas de Luis, solo en el archivo `.env` (ignorado por Git,
+    verificado con `git status` y `git check-ignore`: no entra en el
+    commit). Sin valores reales en ningún otro archivo, HANDOFF o
+    mensaje de commit. Solo URL y clave anon; nunca `service_role`.
+  - **Reclamo de demo:** el primer agente que se registre reclama las
+    8 propiedades y 6 clientes seed; un segundo agente no ve ninguno.
+    Es SOLO DEMO y hay que eliminarlo antes de producción (comentario
+    en el SQL).
+  - **Despliegue en Pages NO hecho en esta fase.** El commit local no
+    incluye push a GitHub ni actualización de `gh-pages`: lo hace el
+    agente padre después. El build de Pages está verificado en local
+    (base `/inmo-visitas/`, 404.html copiado de index.html para las
+    rutas directas), pero la web viva aún sirve la Fase 1.
+  - **Site URL y Redirect URLs pendientes en Supabase:** hay que poner
+    Site URL = http://localhost:5173 y añadir
+    https://luisetic.github.io/inmo-visitas/ en Redirect URLs para que
+    el enlace mágico funcione en local y en Pages (ver .env.example).
+  - Las migraciones 0003/0004 usan `drop policy if exists` y `create
+    index if not exists`: se pueden volver a aplicar sin error si ya
+    existen las políticas o los índices.
+- Cómo probarlo: pasos para Luis (crear el proyecto Supabase de
+  pruebas en región UE —Frankfurt o Irlanda— si no lo tiene, pegar
+  `docs/deploy/supabase-hasta-fase-2.sql` en el SQL Editor de un
+  proyecto nuevo y vacío, o 0003+0004 si ya tiene 0001+0002; configurar
+  Site URL = http://localhost:5173 y añadir
+  https://luisetic.github.io/inmo-visitas/ en Redirect URLs; copiar
+  .env.example a .env con URL y clave anon —el .env local ya está
+  creado—; `npm run dev`; registrar dos agentes y hacer la prueba
+  negativa: con la clave anon y sin sesión, `select * from clients`
+  devuelve 0 filas; con la sesión del agente B no se ven ni se pueden
+  modificar datos del agente A; probar el enlace mágico en local y en
+  Pages, al final de todo).

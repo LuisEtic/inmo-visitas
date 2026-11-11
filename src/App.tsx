@@ -1,36 +1,50 @@
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
+import { AuthProvider } from './components/AuthProvider'
+import { RequireAuth } from './components/RequireAuth'
 import DesignSystem from './pages/DesignSystem'
+import Home from './pages/Home'
+import Login from './pages/Login'
+import Profile from './pages/Profile'
+import Register from './pages/Register'
 
 /**
- * Fase 1: la única ruta es /design-system (showcase del sistema de diseño).
- * La raíz muestra un enlace a esa ruta. No hay login, ni CRUD, ni lógica
- * de negocio en esta fase.
+ * Fase 2: rutas con react-router en modo declarativo.
+ * - Públicas: /login, /registro, /design-system.
+ * - Privadas: / (inicio provisional) y /perfil (redirigen a /login
+ *   sin sesión y vuelven a la ruta pedida tras entrar).
+ * El basename es la base donde se sirve la app: '/' en local y en
+ * Coolify con dominio propio, '/inmo-visitas/' en GitHub Pages (staging).
+ * Sin basename, /login, /registro y /perfil resolverían a la raíz del
+ * dominio y darían 404 en Pages.
  */
 function App() {
-  const pathname = window.location.pathname
-  const isDesignSystem =
-    pathname === '/design-system' ||
-    pathname.endsWith('/design-system') ||
-    pathname.endsWith('/design-system/')
-  if (isDesignSystem) {
-    return <DesignSystem />
-  }
-
   return (
-    <main className="mx-auto max-w-4xl bg-bg px-4 py-12 text-text-primary">
-      <h1 className="text-2xl">Inmo Visitas</h1>
-      <p className="mt-2 text-base text-text-secondary">
-        Notas de visita por voz o texto para agentes inmobiliarios.
-      </p>
-      <p className="mt-6 text-sm">
-        Fase 1 — Fundación: modelo de datos + sistema de diseño Minimal-Mono.
-      </p>
-      <a
-        href={`${import.meta.env.BASE_URL}design-system`}
-        className="mt-4 inline-block rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white"
-      >
-        Ver sistema de diseño
-      </a>
-    </main>
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/registro" element={<Register />} />
+          <Route path="/design-system" element={<DesignSystem />} />
+          <Route
+            path="/"
+            element={
+              <RequireAuth>
+                <Home />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/perfil"
+            element={
+              <RequireAuth>
+                <Profile />
+              </RequireAuth>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
   )
 }
 
