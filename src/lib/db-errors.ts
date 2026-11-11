@@ -18,10 +18,10 @@ export function translateDbError(
     return 'Ya existe un registro con esos datos.'
   }
   if (error.code === '23503') {
-    return 'No se puede borrar: tiene notas de visita asociadas.'
+    return 'No se puede borrar: tiene notas de visita asociadas'
   }
   if (error.code === '42501') {
-    return 'No tienes permiso para esta acción.'
+    return 'No tienes permiso para esta acción'
   }
   return 'Ha ocurrido un error. Inténtalo de nuevo.'
 }

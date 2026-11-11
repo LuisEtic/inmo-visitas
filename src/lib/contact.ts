@@ -17,6 +17,9 @@ import { z } from 'zod'
 const PHONE_ERROR = 'Teléfono no válido'
 const EMAIL_ERROR = 'Email no válido'
 
+/** Número español sin prefijo: 9 dígitos que empiezan por 6, 7, 8 o 9. */
+const SPANISH_NUMBER = /^[6789]\d{8}$/
+
 /** Quita espacios, puntos, guiones y paréntesis de un teléfono. */
 function stripPhoneSeparators(raw: string): string {
   return raw.replace(/[\s.\-()]/g, '')
@@ -25,7 +28,8 @@ function stripPhoneSeparators(raw: string): string {
 /**
  * Normaliza un teléfono a E.164.
  * - 9 dígitos que empiezan por 6, 7, 8 o 9 → `+34XXXXXXXXX`.
- * - Con prefijo `+34` o `0034` + 9 dígitos → `+34XXXXXXXXX`.
+ * - Con prefijo `+34` o `0034` + 9 dígitos que empiezan por 6, 7, 8 o 9
+ *   → `+34XXXXXXXXX` (la misma regla que sin prefijo).
  * - Otro `+` con 8–15 dígitos → se guarda tal cual (E.164 extranjero).
  * - Cualquier otra cosa → lanza Error(PHONE_ERROR).
  */
@@ -34,19 +38,19 @@ export function normalizePhone(raw: string): string {
   if (cleaned === '') {
     throw new Error(PHONE_ERROR)
   }
-  if (/^[6789]\d{8}$/.test(cleaned)) {
+  if (SPANISH_NUMBER.test(cleaned)) {
     return `+34${cleaned}`
   }
   if (cleaned.startsWith('0034')) {
     const rest = cleaned.slice(4)
-    if (/^\d{9}$/.test(rest)) {
+    if (SPANISH_NUMBER.test(rest)) {
       return `+34${rest}`
     }
     throw new Error(PHONE_ERROR)
   }
   if (cleaned.startsWith('+34')) {
     const rest = cleaned.slice(3)
-    if (/^\d{9}$/.test(rest)) {
+    if (SPANISH_NUMBER.test(rest)) {
       return `+34${rest}`
     }
     throw new Error(PHONE_ERROR)

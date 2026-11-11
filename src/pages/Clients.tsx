@@ -64,9 +64,9 @@ export default function Clients() {
             <h1 className="mt-2 text-2xl">Clientes</h1>
             <p className="mt-1 text-sm text-text-secondary">{countLabel}</p>
           </div>
-          <Link to="/clientes/nuevo">
-            <Button size="lg">Nuevo cliente</Button>
-          </Link>
+          <Button asChild size="lg">
+            <Link to="/clientes/nuevo">Nuevo cliente</Link>
+          </Button>
         </div>
 
         {!supabaseConfigured && (
@@ -97,9 +97,9 @@ export default function Clients() {
                 : 'Ningún cliente coincide con la búsqueda'}
             </p>
             {query.trim() === '' && (
-              <Link to="/clientes/nuevo" className="mt-4 inline-block">
-                <Button size="lg">Nuevo cliente</Button>
-              </Link>
+              <Button asChild size="lg" className="mt-4">
+                <Link to="/clientes/nuevo">Nuevo cliente</Link>
+              </Button>
             )}
           </div>
         )}

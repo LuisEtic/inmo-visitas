@@ -10,6 +10,7 @@ import type { PropertyRow, PropertyStatus } from '../lib/database.types'
 import { useAuth } from '../lib/auth-context'
 import { matchesPropertyQuery } from '../lib/search'
 import { listProperties } from '../features/properties/api'
+import { PROPERTY_STATUS_LABELS } from '../features/properties/schema'
 
 type StatusFilter = 'todos' | PropertyStatus
 
@@ -79,9 +80,9 @@ export default function Properties() {
             <h1 className="mt-2 text-2xl">Inmuebles</h1>
             <p className="mt-1 text-sm text-text-secondary">{countLabel}</p>
           </div>
-          <Link to="/inmuebles/nuevo">
-            <Button size="lg">Nuevo inmueble</Button>
-          </Link>
+          <Button asChild size="lg">
+            <Link to="/inmuebles/nuevo">Nuevo inmueble</Link>
+          </Button>
         </div>
 
         {!supabaseConfigured && (
@@ -127,9 +128,9 @@ export default function Properties() {
                 : 'Ningún inmueble coincide con la búsqueda'}
             </p>
             {query.trim() === '' && statusFilter === 'todos' && (
-              <Link to="/inmuebles/nuevo" className="mt-4 inline-block">
-                <Button size="lg">Nuevo inmueble</Button>
-              </Link>
+              <Button asChild size="lg" className="mt-4">
+                <Link to="/inmuebles/nuevo">Nuevo inmueble</Link>
+              </Button>
             )}
           </div>
         )}
@@ -143,7 +144,9 @@ export default function Properties() {
               >
                 <span className="flex flex-wrap items-center gap-2">
                   <span className="font-mono font-semibold">{property.reference}</span>
-                  <Badge variant={property.status}>{property.status}</Badge>
+                  <Badge variant={property.status}>
+                    {PROPERTY_STATUS_LABELS[property.status]}
+                  </Badge>
                 </span>
                 <span className="mt-1 block break-words text-sm text-text-secondary">
                   {property.address}, {property.city}
