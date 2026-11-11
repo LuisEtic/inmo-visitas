@@ -12,9 +12,11 @@ import { PropertyForm } from '../features/properties/PropertyForm'
 import {
   createProperty,
   getProperty,
+  listProperties,
   removeProperty,
   updateProperty,
 } from '../features/properties/api'
+import { nextFreeReference } from '../features/properties/reference'
 import {
   PROPERTY_STATUS_LABELS,
   type PropertyFormValues,
@@ -49,6 +51,11 @@ function PropertyDetailView({ id }: { id: string | undefined }) {
   const [formError, setFormError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  // Solo al crear: la siguiente referencia libre (V-54 si existe hasta
+  // V-53). null mientras carga; si falla la lista, se usa V-01.
+  const [suggestedReference, setSuggestedReference] = useState<string | null>(
+    null,
+  )
 
   useEffect(() => {
     if (id === undefined) {
@@ -71,6 +78,27 @@ function PropertyDetailView({ id }: { id: string | undefined }) {
     }
   }, [id, isNew])
 
+  useEffect(() => {
+    if (!isNew) {
+      return
+    }
+    let mounted = true
+    listProperties()
+      .then((rows) => {
+        if (!mounted) return
+        setSuggestedReference(
+          nextFreeReference(rows.map((row) => row.reference)),
+        )
+      })
+      .catch(() => {
+        if (!mounted) return
+        setSuggestedReference('V-01')
+      })
+    return () => {
+      mounted = false
+    }
+  }, [isNew])
+
   async function handleSubmit(values: PropertyFormValues) {
     setFormError(null)
     setSubmitting(true)
@@ -85,7 +113,15 @@ function PropertyDetailView({ id }: { id: string | undefined }) {
       setProperty(updated)
       setEditing(false)
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : 'Ha ocurrido un error.')
+      const message =
+        error instanceof Error ? error.message : 'Ha ocurrido un error.'
+      setFormError(
+        isNew &&
+          message.startsWith('Ya tienes un inmueble con la referencia') &&
+          suggestedReference !== null
+          ? `${message}. La siguiente libre es ${suggestedReference}.`
+          : message,
+      )
     } finally {
       setSubmitting(false)
     }
@@ -134,6 +170,9 @@ function PropertyDetailView({ id }: { id: string | undefined }) {
         )}
 
         {loading && <p className="mt-6 text-sm text-text-secondary">Cargando…</p>}
+        {isNew && suggestedReference === null && (
+          <p className="mt-6 text-sm text-text-secondary">Cargando…</p>
+        )}
         {loadError !== null && <p className="mt-6 text-sm text-error">{loadError}</p>}
 
         {!loading && !isNew && property === null && loadError === null && (
@@ -148,16 +187,18 @@ function PropertyDetailView({ id }: { id: string | undefined }) {
           </div>
         )}
 
-        {(isNew || editing) && (isNew || property !== null) && (
-          <PropertyForm
-            initial={isNew ? null : property}
-            submitLabel={isNew ? 'Crear inmueble' : 'Guardar cambios'}
-            submitting={submitting}
-            formError={formError}
-            onSubmit={handleSubmit}
-            onCancel={handleCancel}
-          />
-        )}
+        {(isNew || editing) &&
+          (isNew ? suggestedReference !== null : property !== null) && (
+            <PropertyForm
+              initial={isNew ? null : property}
+              suggestedReference={isNew ? suggestedReference ?? undefined : undefined}
+              submitLabel={isNew ? 'Crear inmueble' : 'Guardar cambios'}
+              submitting={submitting}
+              formError={formError}
+              onSubmit={handleSubmit}
+              onCancel={handleCancel}
+            />
+          )}
 
         {!isNew && !editing && property !== null && (
           <div className="mt-6 space-y-5">

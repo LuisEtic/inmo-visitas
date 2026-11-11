@@ -740,3 +740,42 @@ Cambios (aprobados por Luis el 2026-11-11):
     David Romero (V-12, draft). El borrador de voz de prueba creado
     para comprobar la subida se borró tras la prueba. No se borraron
     las cuentas de prueba.
+
+## PARCHE FASE 3 — Precio y referencia en el alta de inmuebles (2026-11-11)
+
+- Origen: prueba en vivo de Luis en el móvil (Fase 3, criterio 1 por la
+  UI). Al crear un inmueble, el precio `285.000` / `285000` daba «Precio
+  no válido» y la referencia `V-52` daba error de formato y «ya existe».
+  Lo reprodujo Muse con tests: `parsePriceEs('285,000')` fallaba (la
+  coma con 3 dígitos no se aceptaba) y en el móvil en español la tecla
+  decimal es la coma, así que es lo que se teclea; `V-52` pasa la
+  validación, así que el error de formato venía de un carácter parecido
+  (espacio o guion distinto del teclado). El «ya existe» era correcto:
+  el V-52 de A ya estaba creado en las pruebas de la Fase 3.
+- Cambios (sin migración, sin tag nuevo; el tag `v0.3-fase-3` no se mueve):
+  - `src/lib/contact.ts`: `parsePriceEs` acepta la coma como miles
+    (`285,000` → 285000; `1,285,000` → 1285000) cuando va seguida de
+    exactamente 3 dígitos y no hay punto; `285,50` sigue siendo decimal.
+    Nuevo `formatPricePlain` (285000 → «285.000», sin €).
+  - `src/features/properties/reference.ts` (nuevo): `normalizeReference`
+    (mayúsculas, guiones parecidos U+2010–U+2015/U+2212 → `-`, sin
+    espacios) y `nextFreeReference` (mayor `V-NN` + 1, con 2 dígitos;
+    sin previas → `V-01`).
+  - `src/features/properties/schema.ts`: la referencia se normaliza
+    antes de validar; el mensaje de precio ahora dice cómo escribirlo
+    («Precio no válido. Escribe 285000 o 285.000.»).
+  - `src/features/properties/PropertyForm.tsx`: al crear, la referencia
+    viene prellenada con la siguiente libre (`suggestedReference`); el
+    precio se normaliza a «285.000» al salir del campo.
+  - `src/pages/PropertyDetail.tsx`: al crear, carga las referencias del
+    agente (`listProperties`) y calcula la sugerencia; si la referencia
+    ya existe, el error añade «La siguiente libre es V-NN.».
+- Verificación: `npm test` 61/61 (8 tests nuevos: coma-miles,
+  normalización de referencia, siguiente libre), `tsc --noEmit` sin
+  errores, `npm run lint` 0 errores (2 warnings previos de shadcn),
+  build sin errores en base `/` y `/inmo-visitas/`, `dist/404.html`
+  copiado. Contra los datos reales de A (V-07…V-54, el V-54 lo creó
+  Luis en la prueba): la siguiente libre es **V-55**.
+- Pendiente de Luis en el móvil: abrir `/inmuebles/nuevo` y comprobar
+  que la referencia ya viene como V-55 y que el precio `285,000` se
+  acepta y se muestra como `285.000`.

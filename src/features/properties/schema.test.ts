@@ -20,8 +20,30 @@ describe('propertyFormSchema', () => {
     }
   })
 
+  it('normaliza la referencia del teclado móvil (guiones y espacios)', () => {
+    for (const [reference, expected] of [
+      ['v–52', 'V-52'],
+      ['V 52', 'V52'],
+      [' v-52 ', 'V-52'],
+    ] as const) {
+      const parsed = propertyFormSchema.safeParse({
+        reference,
+        address: 'Calle de Bravo Murillo 214',
+        city: 'Madrid',
+        price: '285.000',
+        owner_name: 'Rafael Gil Moreno',
+        owner_phone: '',
+        status: 'disponible',
+      })
+      expect(parsed.success, `referencia «${reference}»`).toBe(true)
+      if (parsed.success) {
+        expect(parsed.data.reference).toBe(expected)
+      }
+    }
+  })
+
   it('rechaza referencias con formato no válido', () => {
-    for (const reference of ['', 'v 52', 'v_52', 'V-52!']) {
+    for (const reference of ['', 'v_52', 'V-52!']) {
       const parsed = propertyFormSchema.safeParse({
         reference,
         address: 'Calle de Bravo Murillo 214',
@@ -48,7 +70,7 @@ describe('propertyFormSchema', () => {
     expect(parsed.success).toBe(false)
     if (!parsed.success) {
       const priceIssue = parsed.error.issues.find((issue) => issue.path[0] === 'price')
-      expect(priceIssue?.message).toBe('Precio no válido')
+      expect(priceIssue?.message).toBe('Precio no válido. Escribe 285000 o 285.000.')
     }
   })
 })

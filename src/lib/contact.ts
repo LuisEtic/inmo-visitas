@@ -137,13 +137,23 @@ const MAX_PRICE = 9999999999.99
 /**
  * Interpreta un precio escrito en formato español.
  * `230.000` → 230000; `230000` → 230000; `230.000,50` → 230000.5.
- * El punto es separador de miles y la coma, decimal. Debe ser > 0 y
+ * El punto es separador de miles y la coma, decimal. Excepción: la coma
+ * seguida de exactamente 3 dígitos y sin punto (`285,000`) se lee como
+ * miles, porque en el teclado del móvil en español la tecla decimal es
+ * la coma y es lo que se teclea para 285.000 €. Debe ser > 0 y
  * ≤ 9.999.999.999,99 (`numeric(12,2)`). Lanza Error si no es válido.
  */
 export function parsePriceEs(raw: string): number {
   const cleaned = raw.trim().replace(/\s/g, '')
   if (cleaned === '') {
     throw new Error('Precio no válido')
+  }
+  if (/^\d{1,3}(,\d{3})+$/.test(cleaned)) {
+    const value = Number(cleaned.replace(/,/g, ''))
+    if (!Number.isFinite(value) || value <= 0 || value > MAX_PRICE) {
+      throw new Error('Precio no válido')
+    }
+    return value
   }
   if (!/^\d{1,3}(\.\d{3})*(,\d{1,2})?$/.test(cleaned) && !/^\d+(,\d{1,2})?$/.test(cleaned)) {
     throw new Error('Precio no válido')
@@ -156,6 +166,13 @@ export function parsePriceEs(raw: string): number {
     throw new Error('Precio no válido')
   }
   return value
+}
+
+/** Formatea un precio para el campo de texto: 285000 → «285.000». */
+export function formatPricePlain(value: number): string {
+  return new Intl.NumberFormat('es-ES', {
+    maximumFractionDigits: 2,
+  }).format(value)
 }
 
 /** Formatea un precio en euros con formato español: 230000 → «230.000 €». */

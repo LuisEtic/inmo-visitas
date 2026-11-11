@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { normalizePhone, parsePriceEs } from '../../lib/contact'
 import type { PropertyRow, PropertyStatus } from '../../lib/database.types'
+import { normalizeReference } from './reference'
 
 /**
  * Esquemas Zod de inmuebles (Fase 3).
@@ -26,7 +27,7 @@ const priceField = z.string().transform((raw, ctx) => {
   try {
     return parsePriceEs(raw)
   } catch {
-    ctx.addIssue({ code: 'custom', message: 'Precio no válido' })
+    ctx.addIssue({ code: 'custom', message: 'Precio no válido. Escribe 285000 o 285.000.' })
     return z.NEVER
   }
 })
@@ -43,13 +44,16 @@ export const PROPERTY_STATUS_LABELS: Record<PropertyStatus, string> = {
 export const propertyFormSchema = z.object({
   reference: z
     .string()
-    .trim()
-    .toUpperCase()
-    .min(1, 'Introduce la referencia.')
-    .max(20, 'La referencia no puede tener más de 20 caracteres.')
-    .regex(
-      /^[A-Z0-9][A-Z0-9-]*$/,
-      'La referencia solo admite letras, números y guiones.',
+    .transform((raw) => normalizeReference(raw))
+    .pipe(
+      z
+        .string()
+        .min(1, 'Introduce la referencia.')
+        .max(20, 'La referencia no puede tener más de 20 caracteres.')
+        .regex(
+          /^[A-Z0-9][A-Z0-9-]*$/,
+          'La referencia solo admite letras, números y guiones.',
+        ),
     ),
   address: z
     .string()

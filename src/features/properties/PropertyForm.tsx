@@ -3,7 +3,7 @@ import type { FormEvent } from 'react'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Label } from '../../components/ui/label'
-import { formatPhone } from '../../lib/contact'
+import { formatPhone, formatPricePlain, parsePriceEs } from '../../lib/contact'
 import type { PropertyRow } from '../../lib/database.types'
 import { PROPERTY_STATUSES, propertyFormSchema, type PropertyFormValues } from './schema'
 
@@ -25,6 +25,7 @@ const STATUS_LABELS: Record<string, string> = {
  */
 export function PropertyForm({
   initial,
+  suggestedReference,
   submitLabel,
   submitting,
   formError,
@@ -32,13 +33,17 @@ export function PropertyForm({
   onCancel,
 }: {
   initial?: PropertyRow | null
+  /** Solo al crear: la siguiente referencia libre (V-54 si existe hasta V-53). */
+  suggestedReference?: string
   submitLabel: string
   submitting: boolean
   formError: string | null
   onSubmit: (values: PropertyFormValues) => void
   onCancel: () => void
 }) {
-  const [reference, setReference] = useState(initial?.reference ?? '')
+  const [reference, setReference] = useState(
+    initial?.reference ?? suggestedReference ?? '',
+  )
   const [address, setAddress] = useState(initial?.address ?? '')
   const [city, setCity] = useState(initial?.city ?? 'Madrid')
   const [price, setPrice] = useState(
@@ -130,6 +135,13 @@ export function PropertyForm({
           className={inputClass}
           value={price}
           onChange={(event) => setPrice(event.target.value)}
+          onBlur={() => {
+            try {
+              setPrice(formatPricePlain(parsePriceEs(price)))
+            } catch {
+              // Se deja como está: la validación al guardar explica el error.
+            }
+          }}
           inputMode="decimal"
           placeholder="285.000"
         />

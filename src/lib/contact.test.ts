@@ -3,6 +3,7 @@ import {
   emailHref,
   formatPhone,
   formatPriceEs,
+  formatPricePlain,
   normalizeEmail,
   normalizePhone,
   parsePriceEs,
@@ -118,8 +119,15 @@ describe('parsePriceEs', () => {
     expect(parsePriceEs(' 230.000 ')).toBe(230000)
   })
 
+  it('la coma con 3 dígitos y sin punto es miles (teclado móvil)', () => {
+    expect(parsePriceEs('285,000')).toBe(285000)
+    expect(parsePriceEs('1,285,000')).toBe(1285000)
+    expect(parsePriceEs('285,500')).toBe(285500)
+    expect(parsePriceEs('285,50')).toBe(285.5)
+  })
+
   it('rechaza lo que no es un precio válido', () => {
-    for (const raw of ['', 'abc', '0', '-5', '230,000.50', '12,34,56', '10.000.000.000', '230.00']) {
+    for (const raw of ['', 'abc', '0', '-5', '230,000.50', '12,34,56', '10.000.000.000', '230.00', '285,000,50']) {
       expect(() => parsePriceEs(raw)).toThrow('Precio no válido')
     }
   })
@@ -135,5 +143,12 @@ describe('formatPriceEs', () => {
     expect(formatPriceEs(230000)).toBe('230.000 €')
     expect(formatPriceEs(285000)).toBe('285.000 €')
     expect(formatPriceEs(620000)).toBe('620.000 €')
+  })
+})
+
+describe('formatPricePlain', () => {
+  it('285000 → «285.000» (sin símbolo, para el campo)', () => {
+    expect(formatPricePlain(285000)).toBe('285.000')
+    expect(formatPricePlain(230000.5)).toBe('230.000,5')
   })
 })
