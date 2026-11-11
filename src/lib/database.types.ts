@@ -83,6 +83,7 @@ export type VisitNoteInputType = 'audio' | 'text'
  * para escuchar el audio se pide una URL firmada de 5 minutos.
  * `transcribed` significa «hay texto listo para la extracción» (la
  * Fase 5 leerá `coalesce(transcript, raw_text)`).
+ * `extracted_at` y `approved_at` son de la migración 0007 (Fase 5).
  */
 export type VisitNoteRow = {
   id: string
@@ -94,6 +95,8 @@ export type VisitNoteRow = {
   raw_text: string | null
   transcript: string | null
   status: VisitNoteStatus
+  extracted_at: string | null
+  approved_at: string | null
   created_at: string
 }
 
@@ -112,6 +115,63 @@ export type VisitNoteUpdate = {
   raw_text?: string | null
   transcript?: string | null
   status?: VisitNoteStatus
+  extracted_at?: string | null
+  approved_at?: string | null
+}
+
+export type FactCategory =
+  | 'hecho_declarado'
+  | 'observacion'
+  | 'desconocido'
+  | 'objecion'
+  | 'presupuesto'
+  | 'cita_pendiente'
+
+export type FactReviewStatus = 'propuesto' | 'aceptado' | 'editado' | 'descartado'
+
+export type FactOrigin = 'ia' | 'agente'
+
+/**
+ * Dato extraído de una nota (Fase 5). Columnas de 0001 más las de
+ * revisión de 0007: `origin` (quién lo propuso), `review_status`,
+ * `original_value` (valor de la IA antes de la primera edición) y
+ * `reviewed_at`.
+ */
+export type ExtractedFactRow = {
+  id: string
+  visit_note_id: string
+  category: FactCategory
+  field_name: string
+  value: string
+  evidence_quote: string | null
+  confidence: number | null
+  origin: FactOrigin
+  review_status: FactReviewStatus
+  original_value: string | null
+  reviewed_at: string | null
+  created_at: string
+}
+
+export type ExtractedFactInsert = {
+  visit_note_id: string
+  category: FactCategory
+  field_name: string
+  value: string
+  evidence_quote?: string | null
+  confidence?: number | null
+  origin?: FactOrigin
+  review_status?: FactReviewStatus
+  original_value?: string | null
+  reviewed_at?: string | null
+}
+
+export type ExtractedFactUpdate = {
+  value?: string
+  evidence_quote?: string | null
+  confidence?: number | null
+  review_status?: FactReviewStatus
+  original_value?: string | null
+  reviewed_at?: string | null
 }
 
 export interface Database {
@@ -147,6 +207,12 @@ export interface Database {
         Row: VisitNoteRow
         Insert: VisitNoteInsert
         Update: VisitNoteUpdate
+        Relationships: []
+      }
+      extracted_facts: {
+        Row: ExtractedFactRow
+        Insert: ExtractedFactInsert
+        Update: ExtractedFactUpdate
         Relationships: []
       }
     }

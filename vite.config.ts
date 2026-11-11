@@ -15,6 +15,14 @@ export default defineConfig(({ mode }) => {
 
   return {
     base,
+    resolve: {
+      alias: [
+        // `rules.ts` de las Edge Functions importa zod como `npm:zod@4`
+        // (patrón Deno, igual que `transcribe`); Vitest lo resuelve al
+        // paquete instalado. La build no empaqueta `supabase/functions`.
+        { find: 'npm:zod@4', replacement: 'zod' },
+      ],
+    },
     build: {
       rolldownOptions: {
         output: {

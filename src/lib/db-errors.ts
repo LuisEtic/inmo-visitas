@@ -23,5 +23,18 @@ export function translateDbError(
   if (error.code === '42501') {
     return 'No tienes permiso para esta acción'
   }
+  if (error.code === 'P0001') {
+    // Excepciones de los triggers de revisión (migración 0007): el
+    // mensaje es el nombre del error que lanza el trigger.
+    if (error.message.includes('nota_aprobada')) {
+      return 'La nota está aprobada y ya no se puede cambiar'
+    }
+    if (error.message.includes('datos_sin_revisar')) {
+      return 'Revisa todos los datos antes de aprobar la nota'
+    }
+    if (error.message.includes('texto_bloqueado')) {
+      return 'El texto ya no se puede corregir: tiene datos extraídos'
+    }
+  }
   return 'Ha ocurrido un error. Inténtalo de nuevo.'
 }

@@ -831,3 +831,167 @@ la Fase 3), en Claude Code:
   - La URL firmada del audio se vuelve a pedir al terminar la
     transcripción (efecto con `[note]`): depender solo de
     `note.audio_url`.
+
+## HANDOFF FASE 5
+
+- Hecho: extracción con evidencia + revisión y aprobación. Migración
+  0007 (columnas de revisión, marcas de tiempo y dos triggers guard);
+  Edge Function `extract` (`index.ts` + `rules.ts`, mismo patrón que
+  `transcribe`); revisión en `/notas/:id` (extraer, evidencia
+  resaltada, aceptar/editar/descartar/recuperar/añadir, volver a
+  extraer, aprobar); registro de revisión (resumen con contadores);
+  tipos y capa de datos (`src/features/extraction/`); errores P0001
+  traducidos a español. Sin tocar `transcribe`, las migraciones
+  0001–0006, `tasks`/`drafts`/`crm_exports` ni las mejoras aplazadas
+  a la Fase 9.
+- Tablas/columnas/triggers/políticas creadas o cambiadas: **solo la
+  migración `0007_extraccion_revision.sql`** (idempotente, comentada
+  en español). `extracted_facts`: `origin` (`ia`/`agente`, por
+  defecto `ia`), `review_status` (`propuesto`/`aceptado`/`editado`/
+  `descartado`, por defecto `propuesto`), `original_value`,
+  `reviewed_at`. `visit_notes`: `extracted_at`, `approved_at`.
+  Trigger `visit_notes_guard` (`before update`, `security invoker`):
+  nota aprobada → `nota_aprobada` (P0001); aprobar con datos
+  `propuesto` → `datos_sin_revisar` (P0001), si no, pone
+  `approved_at`; cambiar `raw_text`/`transcript` fuera de `draft` o
+  `transcribed` → `texto_bloqueado` (P0001). Trigger
+  `extracted_facts_guard` (`before insert or update or delete`):
+  nota aprobada → `nota_aprobada`; si la nota ya no existe (borrado
+  en cascada), permite la operación. Archivo
+  `docs/deploy/supabase-fase-5.sql` con solo la 0007 (idéntico a la
+  migración, comprobado con `diff`). No toca RLS.
+- RLS / Edge Functions activas: las políticas de 0004 sin cambios.
+  `extract` **NO está desplegada** (la despliega Luis: Via Editor con
+  sus dos archivos o CLI; ver `supabase/functions/README.md`) y la
+  0007 **NO está aplicada** (la aplica Luis en el SQL Editor). Los
+  *secrets* `EXTRACT_*` los crea Luis (ver ESTADO.md). Sin
+  `service_role` en el cliente ni en la función.
+- Rutas/pantallas nuevas o ampliadas: `/notas/:id` (mismo archivo y
+  patrones): botón «Extraer datos» en `transcribed` («Extrayendo…»,
+  aviso si se descartan datos sin cita); texto con la cita del dato
+  seleccionado resaltada en `<mark>` (`bg-surface` + subrayado, sin
+  colores nuevos) y desplazamiento hasta ella; datos agrupados por
+  categoría en el orden Objeciones, Presupuesto declarado, Citas
+  pendientes (sin confirmar), Por confirmar, Hechos declarados,
+  Observaciones; tarjeta con etiqueta legible, valor, cita, confianza
+  («Confianza alta/media/baja»), badge de revisión y «IA» o
+  «Añadido por ti»; acciones Aceptar/Editar (1–300, guarda
+  `original_value` la primera vez)/Descartar/Recuperar (descartados
+  plegados en «Descartados (N)»); «Añadir dato» (categoría, nombre a
+  `snake_case`, valor, cita opcional que debe estar en el texto;
+  `origin = 'agente'`, `review_status = 'aceptado'`, `confidence`
+  null); «Volver a extraer» solo en `extracted` sin datos revisados,
+  con confirmación; resumen «IA: N propuestos · N aceptados · N
+  editados · N descartados · N añadido por ti»; «Aprobar nota» solo
+  sin datos `propuesto` y con al menos uno no descartado, con
+  confirmación; tras aprobar, «Aprobada el …» y todo en solo lectura
+  (también «Corregir»). Estados: «Datos extraídos», «En revisión»,
+  «Aprobada». 360 px por diseño (una columna, botones `lg` de 48 px);
+  pendiente de comprobar en navegador.
+- Dependencias nuevas: **ninguna de producción**. Solo `resolve.alias`
+  en `vite.config.ts` para que Vitest resuelva el `npm:zod@4` de
+  `rules.ts` (la build no empaqueta `supabase/functions`).
+- Errores o warnings de build: `npm test` — 88 pruebas en 10
+  archivos, todas en verde (61 previas + 27 nuevas: 12 de `rules.ts`,
+  6 de `labels.ts`, 7 de `evidence.ts`, 2 de `db-errors.ts`); `npx tsc
+  --noEmit` sin errores (y `tsc -b` en el build); `npm run build` sin
+  errores en base `/` y con `VITE_BASE_PATH=/inmo-visitas/`; `npm run
+  lint` (oxlint) 0 errores y 2 warnings, los previos de shadcn
+  (`button.tsx` y `badge.tsx`). Trozo JS mayor: **255 kB**
+  (`vendor-react`), por debajo de 500 kB. `dist/404.html` copiado de
+  `dist/index.html` en la build de Pages. `deno check` NO ejecutado:
+  no hay Deno en esta máquina (queda para la revisión de Claude).
+- Qué se envía exactamente al modelo y qué devuelve con la nota de
+  ejemplo: la función envía SOLO el texto de la nota (el cuerpo es
+  `{ model, temperature: 0, response_format: { type: 'json_object' },
+  messages: [ { role: 'system', content: SYSTEM_PROMPT }, { role:
+  'user', content: <transcript ?? raw_text> } ] }`). Con la nota de
+  ejemplo (Ana + V-18), la salida esperada es como mínimo: objeción
+  «ruido nocturno de la calle» («Le preocupa el ruido de la calle
+  Alcalá por la noche»), cita_pendiente «segunda visita el viernes,
+  sin confirmar» («Quiere volver el viernes»), desconocido «hora de
+  la segunda visita» («falta confirmar la hora»), presupuesto
+  «230.000 €» declarado («su presupuesto es de 230.000 euros») y
+  hecho_declarado «pide gastos de comunidad e IBI» («pide que le
+  mandemos los gastos de comunidad e IBI»). Verificado en test:
+  `applyExtractionRules` con esos 5 datos y esa nota los conserva a
+  los 5 (`rules.test.ts`, «con la nota de ejemplo se quedan los 5
+  datos esperados»); la respuesta real del modelo está pendiente de
+  la prueba en vivo de Luis. La clave no aparece en el repo, en
+  `dist/` ni en la red del navegador: solo los NOMBRES de los
+  *secrets* (`Deno.env.get(…)`), sin valores.
+- Supuestos tomados o pendientes:
+  - **BLOQUEADO POR LUIS (0007 sin aplicar):** sin la migración no
+    existen las columnas `origin`/`review_status`/`original_value`/
+    `reviewed_at`/`extracted_at`/`approved_at` ni los triggers; la
+    pantalla pedirá los datos y fallará al leerlos. Desbloqueo:
+    pegar `docs/deploy/supabase-fase-5.sql` en el SQL Editor y
+    comprobar con `select column_name from information_schema.columns
+    where table_name = 'extracted_facts' and column_name in
+    ('origin', 'review_status')` → 2 filas, y `select
+    trigger_name from information_schema.triggers where
+    trigger_name in ('visit_notes_guard',
+    'extracted_facts_guard')` → 2 filas.
+  - **BLOQUEADO POR LUIS (`extract` sin desplegar + *secrets*):**
+    sin la función, «Extraer datos» da 502; sin los *secrets*,
+    también 502 con la nota en `transcribed`. Desbloqueo: crear los
+    *secrets* `EXTRACT_API_URL`, `EXTRACT_MODEL` y
+    `EXTRACT_API_KEY` (valores en ESTADO.md) y desplegar `extract`
+    (Via Editor con `index.ts` + `rules.ts`, o CLI `supabase
+    functions deploy extract`).
+  - **Pendiente de navegador (Luis):** `/notas/:id` completa en la
+    nota de ejemplo: «Extraer datos» (los 5 datos con sus citas,
+    la del viernes como pendiente y el presupuesto como declarado),
+    «Ver cita» (resalta y desplaza), aceptar/editar (guarda
+    `original_value`)/descartar/recuperar/añadir con persistencia
+    tras recargar, «Volver a extraer», «Aprobar nota» desactivado
+    con datos «Propuesto» y activo tras revisarlos, solo lectura
+    tras aprobar; 360 px sin desbordamiento ni errores de consola,
+    en local y en Pages.
+  - **Pendiente en el SQL Editor o por API (Luis, tras la 0007):**
+    criterio 5 (aprobar con datos propuestos falla con
+    `datos_sin_revisar`), criterio 6 (tras aprobar, cambiar texto,
+    dato o añadir uno falla con `nota_aprobada`; borrar la nota
+    aprobada borra también sus datos sin error), criterio 7
+    (corregir el texto de una nota `extracted` falla con
+    `texto_bloqueado`), criterio 8 (`extract` con el JWT de B sobre
+    la nota de A → 404; sin JWT → 401) y criterio 9 (sin
+    `EXTRACT_API_KEY` o con el proveedor caído → 502 y la nota
+    sigue en `transcribed`).
+  - `deno check` de `extract` no ejecutado (sin Deno): lo hace
+    Claude en la revisión.
+  - La copia de `hasEvidence` en `src/features/extraction/evidence.ts`
+    es la misma lógica que `supabase/functions/extract/rules.ts`: si
+    cambia una, hay que cambiar la otra.
+- Cómo probarlo (en vivo contra el proyecto de pruebas, con la nota
+  de ejemplo Ana + V-18, id `e0782f7c-8409-4e23-a2b0-5972521fed0a`):
+  - **Primero Luis:** aplicar `docs/deploy/supabase-fase-5.sql` en
+    el SQL Editor; crear los *secrets* `EXTRACT_*`; desplegar
+    `extract` (Via Editor con los dos archivos, o CLI).
+  - Criterio 1 (navegador): en `/notas/e0782f7c-…`, «Extraer datos»
+    → al menos los 5 datos de la tabla, cada uno con su cita
+    resaltable; la cita del viernes como pendiente y el presupuesto
+    como declarado.
+  - Criterio 2 ✅ (tests): dato sin cita se descarta
+    (`rules.test.ts`, `applyExtractionRules`) y la UI avisa del
+    número; pendiente de ver el aviso en el navegador.
+  - Criterio 3 ✅ (tests): campo sensible (`estado_salud`) se
+    descarta (`rules.test.ts`).
+  - Criterio 4 ⏳ pendiente de navegador: aceptar, editar (guarda
+    `original_value`), descartar, recuperar y añadir persisten tras
+    recargar; la nota pasa a «En revisión» con la primera acción.
+  - Criterios 5–9 ⏳ pendientes de Luis (ver arriba).
+  - Criterio 10 ✅ (código): al modelo solo va el texto de la nota;
+    la clave no está en el repo, `dist/` ni la red del navegador.
+  - Criterio 11 ✅ (local): `npm test` 88/88, `tsc --noEmit` y
+    `tsc -b` sin errores, `npm run build` sin errores en ambas
+    bases, `npm run lint` 0 errores (2 warnings previos de shadcn),
+    trozo mayor 255 kB. `deno check` pendiente (sin Deno).
+  - Criterio 12 ⏳ pendiente: cada pantalla y acción nueva probada
+    en el navegador, a 360 px y sin errores de consola (lo hace
+    Luis en el móvil y en Pages).
+  - Datos de prueba que QUEDAN en el proyecto: sin cambios (nota de
+    ejemplo Ana + V-18, Marta + V-31, nota de voz de Luis
+    `2f328d2c-…`, V-54, V-52 de A, V-52 y V-18 de B, nota sobre
+    David Romero). La extracción en vivo creará los datos de la
+    nota de ejemplo.
