@@ -43,7 +43,7 @@ Entorno de trabajo de Claude: **Claude Code** desde la revisión de la Fase 2. E
 | Fase | Título | Estado | Tag | Revisión Claude | PR |
 |---|---|---|---|---|---|
 | 1 | Fundación: modelo de datos + diseño minimal-mono | Cerrada (desplegada en Pages, commit b075d2e) | v0.1-fase-1 | OK: esquema verificado en PostgreSQL, build verde | #1 aprobado |
-| 2 | Acceso / identidad de agentes + RLS por agente | Entregada por Muse (prueba en vivo 15/16); falta el enlace mágico (criterio 5) | v0.2-fase-2 | OK con ajustes (11 nov., Claude Code): migraciones en PostgreSQL 16 por los dos caminos, prueba negativa de RLS, navegador en `/` y `/inmo-visitas/` | PR de ajustes + migración (pendiente de aprobar) |
+| 2 | Acceso / identidad de agentes + RLS por agente | Entregada por Muse (prueba en vivo 15/16); falta el enlace mágico (criterio 5) | v0.2-fase-2 | OK con ajustes (11 nov., Claude Code): migraciones en PostgreSQL 16 por los dos caminos, prueba negativa de RLS, navegador en `/` y `/inmo-visitas/` | #2 (ajustes + migración, pendiente de aprobar) |
 | 3 | CRUD clientes, inmuebles y contacto | Prompt listo (`docs/prompts/PROMPT-FASE-3.md`); empieza cuando Luis lo pida y tras aprobar el PR | — | — | — |
 | 4 | Captura: voz PWA (audio sí) + texto + transcripción | Pendiente | — | — | — |
 | 5 | Extracción con evidencia + revisión/aprobación | Pendiente | — | — | — |
