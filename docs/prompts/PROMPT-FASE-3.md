@@ -47,8 +47,11 @@ React 19 + Vite 8 + TypeScript estricto + Tailwind v4 + shadcn/ui + Supabase
 2. **Inmuebles:** lista con búsqueda y filtro por estado, alta, ficha (ver y
    editar) y borrado.
 3. **Datos de contacto:** validación y normalización de teléfonos y emails
-   (cliente y propietario), y enlaces de contacto que abre el agente con un
-   toque: `tel:` y `mailto:`. La app no llama ni envía nada por sí misma.
+   **al guardar** (cliente y propietario), y botones de contacto que abre el
+   agente con un toque: «Llamar» (`tel:`), «WhatsApp» (abre el chat con
+   `https://wa.me/…`, sin texto) y «Email» (`mailto:`). Cada botón aparece
+   **solo si hay dato**. La app no llama ni envía nada por sí misma. Ver
+   «Decisión de contacto» abajo.
 4. **Navegación privada:** barra con Inicio, Clientes, Inmuebles y Perfil en
    todas las rutas privadas. Inicio enlaza a Clientes e Inmuebles.
 5. **Pruebas unitarias** de los normalizadores con Vitest (`npm test`).
@@ -67,6 +70,34 @@ React 19 + Vite 8 + TypeScript estricto + Tailwind v4 + shadcn/ui + Supabase
 - Sin paginación en servidor, importación CSV, fotos de inmuebles, mapas ni
   geolocalización.
 - No escribir datos personales en `console.log` ni en mensajes de error.
+
+## DECISIÓN DE CONTACTO (cerrada por Claude con Luis el 2026-11-11)
+
+Queda escrito así, para que no haya dudas:
+
+- **Qué es «contacto» en esta fase:** el teléfono y el email del cliente, y
+  el teléfono del propietario (no hay columna de email del propietario y no
+  se crea). Nada más: sin campo de WhatsApp aparte, sin historial de
+  contactos, sin plantillas de mensaje.
+- **Qué es «validar»:** formato **al guardar** desde la app, en el frontend
+  con Zod (`src/lib/contact.ts`). Si el formato no es válido, el formulario
+  no se guarda y muestra el error. Los teléfonos se guardan normalizados
+  (`+34612345678`) y los emails en minúsculas. **No** se añade restricción en
+  la base de datos en esta fase (sin migración); los datos antiguos con otro
+  formato (el seed, `+34 611 100 200`) se aceptan al leer, se muestran
+  formateados y se normalizan cuando se edita y guarda esa ficha. La
+  restricción en base de datos, si hace falta, va en la Fase 8.
+- **Por qué normalizar:** un único formato evita duplicados del mismo
+  cliente escrito de dos formas, hace que los enlaces `tel:` y `wa.me`
+  funcionen siempre, y prepara la búsqueda por teléfono de la captura
+  (Fase 4) y la exportación al CRM (Fase 7).
+- **Botones:** «Llamar», «WhatsApp» y «Email», solo cuando hay dato. Para
+  el propietario, «Llamar» y «WhatsApp». El de WhatsApp solo **abre el chat**
+  en la app del móvil del agente, sin texto precargado: no envía nada ni
+  comparte datos desde la app. Es distinto de la Fase 7 (enviar los
+  borradores generados por WhatsApp), que sigue fuera de alcance.
+- **Teléfonos extranjeros** (E.164 con otro prefijo): se guardan tal cual y
+  tienen los mismos botones.
 
 ## ESPECIFICACIÓN (crear exactamente así)
 
@@ -87,6 +118,10 @@ React 19 + Vite 8 + TypeScript estricto + Tailwind v4 + shadcn/ui + Supabase
   - `formatPhone(e164)`: `+34612345678` → `612 34 56 78`; los extranjeros, tal
     cual. Debe aceptar también los teléfonos del seed (`+34 611 100 200`).
   - `normalizeEmail(raw)`: recorta y pasa a minúsculas; valida con Zod.
+  - `telHref(phone)` → `tel:+34612345678`; `whatsappHref(phone)` →
+    `https://wa.me/34612345678` (solo dígitos, sin `+`, sin espacios). Ambas
+    aceptan también teléfonos del seed sin normalizar y devuelven `null` si
+    no hay dato o no es válido (entonces no se pinta el botón).
   - `parsePriceEs(raw)`: `230.000` → 230000; `230000` → 230000;
     `230.000,50` → 230000.5. Debe ser > 0 y ≤ 9.999.999.999,99
     (`numeric(12,2)`).
@@ -127,7 +162,7 @@ Errores de la base que hay que traducir:
   «Provisional» si `is_temporary`. Estado vacío: «Todavía no tienes
   clientes» + botón «Nuevo cliente».
 - `/clientes/nuevo` y `/clientes/:id`: el mismo formulario. En la ficha:
-  modo ver (con enlaces «Llamar» `tel:` y «Escribir email» `mailto:` si hay
+  modo ver (con botones «Llamar», «WhatsApp» y «Email», cada uno solo si hay
   dato) y botón «Editar»; «Borrar» con confirmación («¿Borrar a Ana García?
   Esta acción no se puede deshacer.»). Un id inexistente o de otro agente →
   «No encontrado» (RLS devuelve 0 filas: no distinguir entre los dos casos).
@@ -136,7 +171,8 @@ Errores de la base que hay que traducir:
   inmueble», tarjetas ordenadas por referencia: referencia en JetBrains Mono,
   dirección, precio formateado y badge de estado (variantes ya existentes).
 - `/inmuebles/nuevo` y `/inmuebles/:id`: igual que clientes; en la ficha, el
-  bloque «Propietario» con nombre y enlace «Llamar» si hay teléfono.
+  bloque «Propietario» con nombre y botones «Llamar» y «WhatsApp» si hay
+  teléfono.
 - Componentes: Button, Badge, Input y Label existentes. Puedes añadir
   `AlertDialog` de shadcn para la confirmación de borrado (solo tokens
   Minimal-Mono). Móvil primero: una columna, objetivos táctiles de 44 px como
@@ -177,8 +213,11 @@ Errores de la base que hay que traducir:
    puede borrar: tiene notas de visita asociadas» y el cliente sigue ahí.
 6. Buscar «garcia» encuentra a «Ana García»; el filtro «Reservado» muestra
    solo los reservados.
-7. En móvil (360 px), «Llamar» abre `tel:+34…` y no hay desbordamiento
-   horizontal.
+7. En un móvil real: «Llamar» abre el marcador con `+34…`, «WhatsApp» abre
+   el chat con ese número sin texto, «Email» abre el correo; un cliente sin
+   email no muestra el botón «Email». A 360 px no hay desbordamiento
+   horizontal. Teléfono inválido (`12345`) → el formulario no se guarda y
+   dice «Teléfono no válido».
 8. `npm test` pasa con, como mínimo, los casos de `contact.ts` de esta
    especificación (incluidos los del seed y los inválidos).
 9. Las rutas nuevas funcionan en Pages (criterio de despliegue) y en local.

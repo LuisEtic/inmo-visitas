@@ -31,7 +31,8 @@ Entorno de trabajo de Claude: **Claude Code** desde la revisión de la Fase 2. E
 - 2026-11-11 — Revisión de la Fase 2 en Claude Code: OK. Ajustes aprobados por Luis (puntos 2, 4, 5, 6 y 7): migración 0005 (`properties.reference` única por agente, `agents.email` de solo lectura en la base, `visit_notes.client_id`/`property_id` not null, reclamo de demo de una sola vez) y code-splitting. Se mantienen los emails de prueba en el HANDOFF mientras duren las pruebas.
 - 2026-11-11 — Fase 2 cerrada: enlace mágico verificado en la web viva (16/16).
 - 2026-11-11 — Una nota de visita siempre lleva cliente e inmueble; si en la captura no se conoce al cliente, se crea uno provisional (`is_temporary`).
-- 2026-11-11 — Fase 3 sin migración nueva: CRUD sobre el esquema actual, «contacto» = datos de contacto normalizados + enlaces `tel:`/`mailto:` que abre el agente (WhatsApp queda en la Fase 7). *Pendiente de confirmar por Luis.*
+- 2026-11-11 — Fase 3 sin migración nueva: CRUD sobre el esquema actual.
+- 2026-11-11 — «Contacto» en la Fase 3 (decidido por Claude a petición de Luis, tras la pregunta de Muse): validación y normalización al guardar en el frontend (teléfono `+34…`, email en minúsculas), sin restricción en la base hasta la Fase 8; botones «Llamar» (`tel:`), «WhatsApp» (solo abre el chat con `wa.me`, sin texto) y «Email» (`mailto:`), cada uno solo si hay dato. Motivo: en el trabajo diario el agente contacta a propietarios y compradores por teléfono y WhatsApp; un formato único evita duplicados y prepara la Fase 4 (búsqueda por teléfono) y la 7 (CRM). Enviar borradores por WhatsApp sigue siendo la Fase 7.
 
 ## Migración a Claude Code (ejecutada el 2026-11-11, salvo los pasos marcados para Luis)
 1. ✅ Repo `plantilla-app-mvp` creado por Luis (privado). ⬜ **Luis:** marcarlo como *Template repository* (Settings → General → casilla «Template repository»).
@@ -44,8 +45,8 @@ Entorno de trabajo de Claude: **Claude Code** desde la revisión de la Fase 2. E
 | Fase | Título | Estado | Tag | Revisión Claude | PR |
 |---|---|---|---|---|---|
 | 1 | Fundación: modelo de datos + diseño minimal-mono | Cerrada (desplegada en Pages, commit b075d2e) | v0.1-fase-1 | OK: esquema verificado en PostgreSQL, build verde | #1 aprobado |
-| 2 | Acceso / identidad de agentes + RLS por agente | Cerrada: 16/16, enlace mágico verificado en Pages el 11 nov. (commit 5abb997) | v0.2-fase-2 | OK con ajustes (11 nov., Claude Code): migraciones en PostgreSQL 16 por los dos caminos, prueba negativa de RLS, navegador en `/` y `/inmo-visitas/` | #2 (ajustes + migración, pendiente de aprobar) |
-| 3 | CRUD clientes, inmuebles y contacto | Prompt listo (`docs/prompts/PROMPT-FASE-3.md`); empieza cuando Luis lo pida y tras aprobar el PR | — | — | — |
+| 2 | Acceso / identidad de agentes + RLS por agente | Cerrada: 16/16, enlace mágico verificado en Pages el 11 nov. (commit 5abb997) | v0.2-fase-2 | OK con ajustes (11 nov., Claude Code): migraciones en PostgreSQL 16 por los dos caminos, prueba negativa de RLS, navegador en `/` y `/inmo-visitas/` | #2 (ajustes + migración, fusionado) |
+| 3 | CRUD clientes, inmuebles y contacto | Prompt listo (`docs/prompts/PROMPT-FASE-3.md`, con la decisión de contacto); empieza cuando Luis lo pida | — | — | — |
 | 4 | Captura: voz PWA (audio sí) + texto + transcripción | Pendiente | — | — | — |
 | 5 | Extracción con evidencia + revisión/aprobación | Pendiente | — | — | — |
 | 6 | Borradores duales + bandeja de pendientes (incluye lista de notas guardadas) | Pendiente | — | — | — |
