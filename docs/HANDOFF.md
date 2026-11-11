@@ -267,12 +267,13 @@ Historial de entregas por fase. Un bloque por fase, en orden.
     registro de las cuentas de prueba devolvió «email rate limit
     exceeded». Las cuentas de prueba se crearon desde el panel
     (Authentication → Users → Create new user, con «Auto Confirm
-    User»), sin gastar emails. **Enlace mágico PENDIENTE:** `signInWithOtp`
-    con `emailRedirectTo` de Pages devuelve «email rate limit
-    exceeded»; se reintentará cuando se libere el límite (~13:11 del
-    2026-11-11). El código pasa `emailRedirectTo` en `signUp` y en
-    `signInWithOtp`, y la Site URL y las Redirect URLs ya están
-    configuradas (ver punto siguiente).
+    User»), sin gastar emails. **Enlace mágico VERIFICADO el
+    2026-11-11 ~13:42 por Luis en la web viva:** pidió el enlace en
+    /login con la cuenta A, recibió el correo en su Hotmail, pulsó el
+    enlace y aterrizó en / con sesión iniciada («Hola, Agente A
+    Prueba»). 16/16: la Fase 2 queda cerrada del todo. El código pasa
+    `emailRedirectTo` en `signUp` y en `signInWithOtp`, y la Site URL
+    y las Redirect URLs ya están configuradas (ver punto siguiente).
   - **SQL verificado por lectura, no por ejecución.** No hay Postgres
     local en esta máquina para ejecutar las migraciones (ni `psql` ni
     Docker). La sintaxis sigue los mismos patrones que 0001 (verificada
