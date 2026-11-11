@@ -642,23 +642,19 @@ Cambios (aprobados por Luis el 2026-11-11):
   «Supuestos tomados o pendientes»). Micrófono no probado en ningún
   dispositivo real.
 - Supuestos tomados o pendientes:
-  - **BLOQUEADO POR LUIS (0006 sin aplicar):** la subida de audio a
-    `visit-audio` falla con «Bucket not found» (comprobado por API como
-    A); sin bucket no se puede probar la voz de extremo a extremo, ni
-    la política de Storage de B en la carpeta de A (el listado como B
-    devuelve 0 objetos, sin bucket no prueba la política), ni la URL
-    firmada. Desbloqueo: pegar `docs/deploy/supabase-fase-4.sql` en el
-    SQL Editor y comprobar con `select id, public from
-    storage.buckets where id = 'visit-audio'` → `visit-audio | false`.
-  - **BLOQUEADO POR LUIS (`transcribe` sin desplegar):** invocar la
-    función con y sin JWT devuelve «Edge Function returned a non-2xx
-    status code» (función inexistente). Sin desplegar no se puede
-    probar la transcripción real, el 404 con el JWT de B sobre la nota
-    de A, el 401 sin JWT ni el 502 con el proveedor caído. Desbloqueo:
-    Supabase → Edge Functions → Deploy a new function → Via Editor,
-    nombre `transcribe`, pegar `supabase/functions/transcribe/index.ts`
-    (los tres secrets ya están creados). Después, en `/notas/<id de la
-    nota de voz>` la transcripción debe lanzarse sola.
+  - **Verificado tras el despliegue (Luis, 2026-11-11 ~17:50):** la
+    0006 está aplicada (Success en el SQL Editor) y el bucket existe
+    y es privado (`select id, public from storage.buckets where id =
+    'visit-audio'` → `visit-audio | false`); `transcribe` está
+    desplegada (Via Editor, nombre `transcribe`) y responde: POST
+    con nota inexistente → 404 `{"error":"No encontrado"}` y
+    preflight CORS → 204. Conducto de voz verificado 12/12 con audio
+    sintético: A crea la nota de audio, sube a su carpeta, invoca
+    `transcribe` → 200 y la nota pasa a `transcribed`; B ve 0
+    objetos en la carpeta de A, no puede subir en ella (RLS) y
+    `transcribe` con su JWT da 404; sin JWT, 401. La nota y el audio
+    de prueba se borraron tras la prueba. Lo que queda de voz es la
+    grabación real en móvil (criterio 3).
   - **Pendiente de navegador (padre + Luis):** `/capturar` completa
     (búsqueda de cliente/inmueble, cliente provisional, pestañas,
     grabación, contador, parada a los 3:00, reproductor del blob,
@@ -683,11 +679,11 @@ Cambios (aprobados por Luis el 2026-11-11):
   con la clave anon; agentes de prueba
   pluton2408+agente-a@hotmail.com y pluton2408+agente-b@hotmail.com;
   las contraseñas NO se escriben aquí, como en la Fase 2):
-  - **Primero Luis:** pegar `docs/deploy/supabase-fase-4.sql` en el
-    SQL Editor (comprobación: `select id, public from
-    storage.buckets where id = 'visit-audio'` → `visit-audio |
-    false`); desplegar `transcribe` (Via Editor, nombre `transcribe`,
-    pegar `supabase/functions/transcribe/index.ts`).
+  - **Hecho por Luis el 2026-11-11:** `docs/deploy/supabase-fase-4.sql`
+    aplicado en el SQL Editor (Success) y `transcribe` desplegada
+    (Via Editor, nombre `transcribe`). Comprobado: bucket
+    `visit-audio | false` y la función responde 404 a nota
+    inexistente.
   - Criterio 1 ✅ (API): A crea la nota de texto del ejemplo (Ana
     García + V-18, id `e0782f7c-8409-4e23-a2b0-5972521fed0a`):
     `input_type = text`, `status = transcribed`, `raw_text` exacto,
@@ -697,8 +693,12 @@ Cambios (aprobados por Luis el 2026-11-11):
     se guarda y lo explica en español (`audio.test.ts`); sin
     cliente/inmueble el botón «Guardar nota» está desactivado (por
     diseño; pendiente de navegador).
-  - Criterio 3 ⏳ bloqueado: voz de extremo a extremo pendiente de la
-    0006, del despliegue y de un móvil real (ver arriba).
+  - Criterio 3 ✅ conducto verificado por API (12/12 con audio
+    sintético, ver arriba): nota de audio → subida → `transcribe` →
+    `transcribed`. Pendiente la voz real en un móvil real (Android
+    con Chrome y, si es posible, iPhone con Safari): grabar, escuchar,
+    guardar y comprobar que la nota pasa a «Transcrita» con un texto
+    razonable en español.
   - Criterio 4 ⏳ pendiente de navegador: sin permiso de micrófono, el
     mensaje es «Permite el micrófono para grabar. También puedes
     escribir la nota.» y la pestaña «Texto» sigue funcionando.
@@ -712,13 +712,13 @@ Cambios (aprobados por Luis el 2026-11-11):
     persiste tras releer (y se restauró el texto original). Pendiente
     de repetirlo con la transcripción de una nota de voz en el
     navegador.
-  - Criterio 7 ⚠️ parcial (API): B no ve la nota de A por id (null =
-    «No encontrado») ni puede modificarla (0 filas). La parte de
-    Storage y de `transcribe` (404 con JWT de B, 401 sin JWT) está
-    bloqueada por la 0006 y el despliegue (ver arriba).
-  - Criterio 8 ⏳ bloqueado: 502 sin clave o con el proveedor caído,
-    pendiente del despliegue (después se prueba quitando el secret
-    temporalmente o con el proveedor caído).
+  - Criterio 7 ✅ (API): B no ve la nota de A por id (null =
+    «No encontrado») ni puede modificarla (0 filas); B ve 0 objetos
+    en la carpeta de A en `visit-audio`, no puede subir en ella (RLS)
+    y `transcribe` con su JWT da 404; sin JWT, 401.
+  - Criterio 8 ⏳ pendiente: 502 sin clave o con el proveedor caído
+    (se prueba quitando el secret temporalmente o con el proveedor
+    caído; ya no depende del despliegue).
   - Criterio 9 ✅: la clave no aparece en el repo, en `dist/`, en el
     HANDOFF ni en la red del navegador: `gsk_` 0 ocurrencias en todo
     el repo; `TRANSCRIBE` 0 archivos en `dist/`; el frontend solo
