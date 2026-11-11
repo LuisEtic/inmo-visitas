@@ -638,12 +638,13 @@ Cambios (aprobados por Luis el 2026-11-11):
   2 warnings, los previos de shadcn (`button.tsx` y `badge.tsx`).
   Trozo JS mayor: **255 kB** (`vendor-react`), por debajo de 500 kB.
   `dist/404.html` copiado de `dist/index.html` en la build de Pages.
-- Navegadores y móviles probados: **ninguno** — esta fase no se pudo
-  probar en el navegador (el constructor no opera el navegador; lección
-  de la Fase 3 aplicada así: todo lo verificable por API y tests está
-  probado; lo de navegador queda documentado pantalla por pantalla en
-  «Supuestos tomados o pendientes»). Micrófono no probado en ningún
-  dispositivo real.
+- Navegadores y móviles probados: **Luis en móvil real (Android con
+  Chrome) y en web, 2026-11-11 ~19:00** — inicio Fase 4, `/capturar`
+  (búsquedas, pestañas Voz/Texto, aviso, botón Guardar desactivado sin
+  cliente/inmueble), grabación de voz real con transcripción exacta y
+  alta de inmueble por la UI (V-54). Sin errores de consola vistos.
+  Pendiente: la nota de ejemplo en `/notas/:id`, crear cliente por la
+  UI y la recarga de una ficha (Fase 3, criterios 3 y 9).
 - Supuestos tomados o pendientes:
   - **Verificado tras el despliegue (Luis, 2026-11-11 ~17:50):** la
     0006 está aplicada (Success en el SQL Editor) y el bucket existe
@@ -656,18 +657,18 @@ Cambios (aprobados por Luis el 2026-11-11):
     `transcribe` → 200 y la nota pasa a `transcribed`; B ve 0
     objetos en la carpeta de A, no puede subir en ella (RLS) y
     `transcribe` con su JWT da 404; sin JWT, 401. La nota y el audio
-    de prueba se borraron tras la prueba. Lo que queda de voz es la
-    grabación real en móvil (criterio 3).
-  - **Pendiente de navegador (padre + Luis):** `/capturar` completa
-    (búsqueda de cliente/inmueble, cliente provisional, pestañas,
-    grabación, contador, parada a los 3:00, reproductor del blob,
-    guardado de texto y de voz, reintento de subida); `/notas/:id`
-    (audio con URL firmada, «Transcribiendo…», corrección y su
-    persistencia, «No encontrado» como B); 360 px sin desbordamiento
-    ni errores de consola, en local y en Pages. Voz en **móvil real**
-    (Android con Chrome y, si es posible, iPhone con Safari): grabar,
-    escuchar, guardar y comprobar que la nota pasa a «Transcrita» y
-    que el audio está en `visit-audio/<id de A>/<id de la nota>.<ext>`.
+    de prueba se borraron tras la prueba. Voz real en móvil verificada
+    por Luis el mismo día ~19:00 (criterio 3): grabó el texto de Ana +
+    V-18 en `/capturar`, guardó y la nota pasó a `transcribed` con la
+    transcripción exacta del dictado (nota `2f328d2c-…`, audio webm en
+    su carpeta). El botón «Guardar nota» solo se activa con cliente +
+    inmueble + audio, como está diseñado (Luis lo comprobó al grabar
+    antes de elegirlos).
+  - **Pendiente de navegador:** ver la nota de ejemplo en `/notas/:id`
+    (criterio 1); crear cliente por la UI y recargar una ficha (Fase 3,
+    criterios 3 y 9); parada automática a los 3:00, reintento de subida
+    y mensaje sin permiso de micrófono (criterio 4); 360 px sin
+    desbordamiento ni errores de consola.
   - La validación de longitud del texto (10–5.000) es solo de
     frontend (Zod): la base no la restringe, igual que en la Fase 3
     con el contacto.
@@ -697,11 +698,10 @@ Cambios (aprobados por Luis el 2026-11-11):
     cliente/inmueble el botón «Guardar nota» está desactivado (por
     diseño; pendiente de navegador).
   - Criterio 3 ✅ conducto verificado por API (12/12 con audio
-    sintético, ver arriba): nota de audio → subida → `transcribe` →
-    `transcribed`. Pendiente la voz real en un móvil real (Android
-    con Chrome y, si es posible, iPhone con Safari): grabar, escuchar,
-    guardar y comprobar que la nota pasa a «Transcrita» con un texto
-    razonable en español.
+    sintético, ver arriba) y con voz real en móvil por Luis (~19:00):
+    grabó el texto de Ana + V-18 en `/capturar`, guardó y la nota
+    (`2f328d2c-…`, audio webm) pasó a `transcribed` con la
+    transcripción exacta del dictado.
   - Criterio 4 ⏳ pendiente de navegador: sin permiso de micrófono, el
     mensaje es «Permite el micrófono para grabar. También puedes
     escribir la nota.» y la pestaña «Texto» sigue funcionando.
@@ -728,18 +728,22 @@ Cambios (aprobados por Luis el 2026-11-11):
     llama a `functions.invoke('transcribe', …)` y nunca ve los
     secrets; en el código solo aparecen los NOMBRES de los secrets
     (`Deno.env.get(…)`), sin valores.
-  - Criterio 10 ✅: `npm test` 53/53, `npx tsc --noEmit` sin errores,
+  - Criterio 10 ✅: `npm test` 61/61 (53 de la fase + 8 del parche de
+    precio/referencia), `npx tsc --noEmit` sin errores,
     `npm run build` sin errores en ambas bases, `npm run lint` 0
     errores (2 warnings previos de shadcn), trozo mayor 255 kB.
     `deno check` no ejecutado (sin Deno).
-  - Criterio 11 ⏳ pendiente: cada pantalla nueva probada en el
-    navegador, a 360 px y sin errores de consola, en local y en
-    Pages (lo hace el padre con el navegador real y Luis en el
-    móvil).
+  - Criterio 11 ⏳ parcial: inicio, `/capturar` y voz verificados por
+    Luis en el móvil y en web; pendientes la nota de ejemplo en
+    `/notas/:id`, la comprobación a 360 px sin errores de consola y el
+    parche de precio/referencia en `/inmuebles/nuevo` (V-55, precio
+    `285,000`).
   - Datos de prueba que QUEDAN en el proyecto: nota de texto de
     ejemplo (Ana + V-18, id `e0782f7c-…`), cliente provisional Marta
-    (la del lunes) + su nota (V-31, id `d91d1785-…`). Además, de la
-    Fase 3: V-52 de A, V-52 y V-18 de B, y la nota de prueba sobre
+    (la del lunes) + su nota (V-31, id `d91d1785-…`), nota de voz de
+    Luis (Ana + V-18, id `2f328d2c-…`, audio webm, `transcribed`) e
+    inmueble V-54 creado por Luis en la prueba de la Fase 3. Además,
+    de la Fase 3: V-52 de A, V-52 y V-18 de B, y la nota de prueba sobre
     David Romero (V-12, draft). El borrador de voz de prueba creado
     para comprobar la subida se borró tras la prueba. No se borraron
     las cuentas de prueba.
