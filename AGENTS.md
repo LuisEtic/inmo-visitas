@@ -51,6 +51,9 @@ Normas del proyecto. Leer antes de tocar código, junto con
 - Fase 2: acceso e identidad de agentes + RLS por agente (tag
   `v0.2-fase-2`), cerrada (16/16) y revisada por Claude con ajustes
   (migración 0005).
-- Fase 3 (siguiente, solo cuando Luis lo pida): CRUD de clientes e
-  inmuebles + contacto. Prompt en `docs/prompts/PROMPT-FASE-3.md`.
-- Captura es la Fase 4; lista de borradores, la Fase 6.
+- Fase 3: CRUD de clientes e inmuebles + contacto (tag `v0.3-fase-3`),
+  revisada por Claude con ajustes (altas por la UI arregladas).
+- Fase 4 (siguiente, solo cuando Luis lo pida): captura por voz y texto +
+  transcripción. Prompt en `docs/prompts/PROMPT-FASE-4.md`.
+- Lista de notas y borradores: Fase 6.
+- Cada pantalla se prueba en el navegador, no solo por API.

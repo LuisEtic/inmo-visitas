@@ -1,6 +1,6 @@
 # ESTADO — Inmo Visitas (piloto de la skill app-mvp)
-Última actualización: 2026-11-11 (revisión de la Fase 2 + migración a Claude Code, en Claude Code)
-Etapa actual: 5 · Bucle por fase   ·   Fase de construcción: 2 de 9 cerrada (16/16, revisada) · Fase 3 con prompt listo, empieza al aprobar el PR #2
+Última actualización: 2026-11-11 (revisión de la Fase 3 y prompt de la Fase 4, en Claude Code)
+Etapa actual: 5 · Bucle por fase   ·   Fase de construcción: 3 de 9 entregada y revisada con ajustes (PR de revisión de la Fase 3) · Fase 4 con prompt listo, empieza cuando Luis lo pida tras el merge
 Constructor: Muse (chat, Git en su espacio → GitHub)   ·   Repo: https://github.com/LuisEtic/inmo-visitas (PÚBLICO, necesario para GitHub Pages gratis)
 Staging actual: https://luisetic.github.io/inmo-visitas/ (rama `gh-pages`, despliegue manual de Muse)   ·   Producción: Hostinger VPS + Coolify
 Entorno de trabajo de Claude: **Claude Code** desde la revisión de la Fase 2. Este archivo (`docs/ESTADO.md` en el repo) es la fuente de verdad; el proyecto de Claude.ai «APP INMO VISITAS» se archiva tras el PR de migración.
@@ -32,6 +32,8 @@ Entorno de trabajo de Claude: **Claude Code** desde la revisión de la Fase 2. E
 - 2026-11-11 — Fase 2 cerrada: enlace mágico verificado en la web viva (16/16).
 - 2026-11-11 — Una nota de visita siempre lleva cliente e inmueble; si en la captura no se conoce al cliente, se crea uno provisional (`is_temporary`).
 - 2026-11-11 — Fase 3 sin migración nueva: CRUD sobre el esquema actual.
+- 2026-11-11 — Revisión de la Fase 3: OK con ajustes, aprobados por Luis: altas `/clientes/nuevo` e `/inmuebles/nuevo` arregladas (`useParams` sin `:id` en rutas estáticas), `<Button asChild>` en vez de botón dentro de enlace, etiqueta de estado en la lista, `+34` con 6/7/8/9 y mensajes como en el prompt. Desde ahora, cada fase se prueba también en el navegador, no solo por API (criterio explícito en el prompt de la Fase 4).
+- 2026-11-11 — Fase 4 (decidido por Claude en el prompt, para que Luis lo confirme al lanzarla): audio en un bucket privado `visit-audio` con carpeta por agente y políticas de Storage ya en la Fase 4 (migración 0006), no en la 8, porque se van a subir audios; `audio_url` guarda la ruta, no una URL pública, y se escucha con URL firmada de 5 min; Edge Function `transcribe` con el JWT del agente (RLS dentro de la función, sin `service_role`) y Whisper `whisper-1` en español; grabación de 3 min como máximo y 10 MB; nota de texto = estado `transcribed`; cliente provisional rápido desde la captura; sin cola offline (Fase 9).
 - 2026-11-11 — «Contacto» en la Fase 3 (decidido por Claude a petición de Luis, tras la pregunta de Muse): validación y normalización al guardar en el frontend (teléfono `+34…`, email en minúsculas), sin restricción en la base hasta la Fase 8; botones «Llamar» (`tel:`), «WhatsApp» (solo abre el chat con `wa.me`, sin texto) y «Email» (`mailto:`), cada uno solo si hay dato. Motivo: en el trabajo diario el agente contacta a propietarios y compradores por teléfono y WhatsApp; un formato único evita duplicados y prepara la Fase 4 (búsqueda por teléfono) y la 7 (CRM). Enviar borradores por WhatsApp sigue siendo la Fase 7.
 
 ## Migración a Claude Code (ejecutada el 2026-11-11, salvo los pasos marcados para Luis)
@@ -46,8 +48,8 @@ Entorno de trabajo de Claude: **Claude Code** desde la revisión de la Fase 2. E
 |---|---|---|---|---|---|
 | 1 | Fundación: modelo de datos + diseño minimal-mono | Cerrada (desplegada en Pages, commit b075d2e) | v0.1-fase-1 | OK: esquema verificado en PostgreSQL, build verde | #1 aprobado |
 | 2 | Acceso / identidad de agentes + RLS por agente | Cerrada: 16/16, enlace mágico verificado en Pages el 11 nov. (commit 5abb997) | v0.2-fase-2 | OK con ajustes (11 nov., Claude Code): migraciones en PostgreSQL 16 por los dos caminos, prueba negativa de RLS, navegador en `/` y `/inmo-visitas/` | #2 (ajustes + migración, fusionado) |
-| 3 | CRUD clientes, inmuebles y contacto | Cerrada (verificado en vivo 11 nov.: criterios 1–6, 8 y 10 completos; 7 parcial — móvil real pendiente; 9 parcial — Pages pendiente) | v0.3-fase-3 | Pendiente | — |
-| 4 | Captura: voz PWA (audio sí) + texto + transcripción | Pendiente | — | — | — |
+| 3 | CRUD clientes, inmuebles y contacto | Entregada con ajustes. Muse probó por API, no en navegador: las altas por la UI estaban rotas (arreglado en el PR). Pendiente de Luis en Pages: criterios 1 y 3 por la UI, 7 (móvil real) y 9 (recarga) | v0.3-fase-3 | OK con ajustes (11 nov., Claude Code): build/tsc/lint/test en verde, sin migraciones, navegador a 360 px con Supabase simulado | PR de revisión de la Fase 3 |
+| 4 | Captura: voz PWA (audio sí) + texto + transcripción | Prompt listo (`docs/prompts/PROMPT-FASE-4.md`); empieza cuando Luis lo pida | — | — | — |
 | 5 | Extracción con evidencia + revisión/aprobación | Pendiente | — | — | — |
 | 6 | Borradores duales + bandeja de pendientes (incluye lista de notas guardadas) | Pendiente | — | — | — |
 | 7 | Exportación CRM y WhatsApp | Pendiente | — | — | — |
@@ -66,6 +68,10 @@ Entorno de trabajo de Claude: **Claude Code** desde la revisión de la Fase 2. E
 - `docs/prompts/` con los dos prompts y cabecera actualizada.
 
 ## Pendientes y riesgos abiertos
+- **Fase 3, tras el merge y el despliegue en Pages (Luis):** repetir por la UI los criterios 1 y 3, en un móvil real el 7 y la recarga de `/inmo-visitas/clientes/<id>` (criterio 9).
+- **Fase 4 necesita una clave de OpenAI** (Luis): crear una API key con límite de gasto mensual bajo y guardarla solo como secret `OPENAI_API_KEY` en Supabase → Edge Functions → Secrets. Nunca pasarla a Muse ni pegarla en un chat.
+- **RGPD en la Fase 4:** los audios y transcripciones son datos personales y Whisper (OpenAI) los trata fuera del Supabase de la UE. Hasta revisar el contrato de encargo del tratamiento (DPA) de OpenAI y la base legal (Fase 8), probar **solo con datos ficticios**. Decisión jurídica de Luis, no de la IA.
+- Datos de prueba de Muse que quedan en el Supabase de pruebas: V-52 de A, V-52 y V-18 de B, nota de visita sobre David Romero.
 - Repo público: el código de un producto marca blanca queda visible. Pasar staging a Coolify (auto-deploy + preview por PR) y volver a privado como tarde antes de enseñarlo a clientes reales o antes de la Fase 8.
 - **Aplicar la 0005 en el Supabase de pruebas** (Luis, SQL Editor: pegar solo `supabase/migrations/0005_ajustes_revision_fase_2.sql`) tras aprobar el PR y antes de la Fase 3.
 - Emails de prueba en `docs/HANDOFF.md` (repo público): quitarlos al terminar las pruebas de la Fase 2. Seguirán en el historial de Git salvo que se reescriba.
@@ -77,4 +83,5 @@ Entorno de trabajo de Claude: **Claude Code** desde la revisión de la Fase 2. E
 
 ## Consumo
 - Claude: revisión de la Fase 1 + PR #1 ≈ 3–5 %. Chats de entorno, alineación y revisión del prompt corregido (10–11 nov.) ≈ 3–4 %. Revisión de la Fase 2 + ajustes + migración + prompt de la Fase 3 (11 nov., Claude Code) ≈ 9–12 % (por encima de lo previsto, por las pruebas en PostgreSQL y en navegador y la plantilla).
+- Claude: revisión de la Fase 3 (con navegador) + ajustes + prompt de la Fase 4 (11 nov.) ≈ 7–9 %.
 - Muse: Fase 1 ≈ 0,5–1 % de su cupo semanal (reinicio: 12 nov., 15:22). Previsión de las 9 fases: ~10–20 %.

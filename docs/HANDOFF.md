@@ -520,3 +520,48 @@ Cambios (aprobados por Luis: puntos 2, 4, 5, 6 y 7 de la revisión):
     V-18 de B de la comprobación de la 0005 ya estaba borrado.
     Ana García y V-07 quedaron con sus valores del seed. No se
     borraron las cuentas de prueba.
+
+---
+
+## Ajustes post-Fase 3 (revisión de Claude, sin cambio de fase)
+
+Revisión del 2026-11-11 (`6225d00..d529595`, tag `v0.3-fase-3`), en Claude
+Code: `npm ci`, `tsc --noEmit`, `npm test` (31/31), `npm run lint` (0
+errores, 2 avisos previos de shadcn) y `npm run build` con base
+`/inmo-visitas/` (trozo mayor 255 kB) sin errores. Sin migraciones nuevas
+(0001–0005 sin tocar) ni cambios de RLS: la prueba negativa de la Fase 2
+sigue valiendo. Las FK de `visit_notes` son `on delete restrict`, así que el
+23503 al borrar es correcto. Navegador (Chromium, 360 px, Supabase simulado
+con interceptación de red): listas, búsqueda «garcia», filtro por estado,
+fichas, `tel:`/`wa.me`/`mailto:` y teléfonos del seed formateados, sin
+desbordamiento horizontal ni errores de consola.
+
+Cambios (aprobados por Luis el 2026-11-11):
+
+- **Importante — altas rotas en la UI.** `/clientes/nuevo` e
+  `/inmuebles/nuevo` se quedaban en «Cargando…» para siempre: son rutas
+  estáticas sin `:id`, así que `useParams()` da `id = undefined` y
+  `isNew = id === 'nuevo'` era `false`. La prueba en vivo de Muse fue por
+  API (sin navegador), por eso el criterio 1 constaba como superado.
+  Ahora `isNew = id === undefined`, y el componente de la ficha se monta con
+  `key = id` (`ClientDetailView` / `PropertyDetailView`) para que, al pasar
+  de «nuevo» a la ficha creada, no arrastre el estado de edición.
+  Verificado en navegador: crear «Irene Castro Vidal» con `12345` → «Teléfono
+  no válido»; con `612.34.56.78` e `Irene.Castro@Example.com` → la petición
+  envía `+34612345678` e `irene.castro@example.com` (sin `agent_id`) y la
+  ficha queda en modo ver.
+- `<Link><Button/></Link>` (botón dentro de enlace, HTML no válido) →
+  `<Button asChild><Link/></Button>` en «Nuevo cliente», «Nuevo inmueble» y
+  «Volver a …».
+- La lista de inmuebles mostraba el estado en minúsculas («reservado»):
+  ahora usa `PROPERTY_STATUS_LABELS` (en `features/properties/schema.ts`),
+  igual que la ficha.
+- `normalizePhone`: con `+34`/`0034` también exige que el número empiece por
+  6, 7, 8 o 9 (antes aceptaba `+34123456789`). 2 casos inválidos más en
+  `contact.test.ts`.
+- Mensajes 23503 y 42501 sin punto final, como en el prompt.
+- Pendiente de Luis (tras el merge y el despliegue en Pages): repetir en la
+  web viva los criterios 1 y 3 por la UI, y el 7 (móvil real) y el 9
+  (recarga en `/inmo-visitas/clientes/<id>`). Quedan datos de prueba de Muse
+  en el Supabase de pruebas (V-52 de A, V-52 y V-18 de B, nota de visita
+  sobre David Romero).
