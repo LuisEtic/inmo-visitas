@@ -15,6 +15,25 @@ export default defineConfig(({ mode }) => {
 
   return {
     base,
+    build: {
+      rolldownOptions: {
+        output: {
+          // Librerías grandes en trozos propios (revisión Fase 2): el
+          // navegador las guarda en caché entre despliegues y ningún trozo
+          // supera el aviso de 500 kB.
+          codeSplitting: {
+            groups: [
+              { name: 'vendor-supabase', test: /node_modules[\\/]@supabase[\\/]/ },
+              {
+                name: 'vendor-react',
+                test: /node_modules[\\/](react|react-dom|react-router|scheduler)[\\/]/,
+              },
+              { name: 'vendor', test: /node_modules[\\/]/ },
+            ],
+          },
+        },
+      },
+    },
     plugins: [
       react(),
       tailwindcss(),

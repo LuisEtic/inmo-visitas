@@ -31,9 +31,14 @@ Migraciones numeradas en `supabase/migrations/`:
 
 - `0001_initial_schema.sql` — 8 tablas del dominio.
 - `0002_seed_demo.sql` — 8 propiedades y 6 clientes de demostración.
+- `0003_auth_agents_trigger.sql` — alta automática del agente (trigger).
+- `0004_rls_por_agente.sql` — RLS por agente en las 8 tablas.
+- `0005_ajustes_revision_fase_2.sql` — referencia única por agente, email
+  de solo lectura, nota siempre con cliente e inmueble, reclamo de demo
+  de una sola vez.
 
-Sin RLS todavía: planificada para la Fase 8. En esta fase las tablas
-quedan accesibles sin restricción, de forma intencional y temporal.
+RLS activa desde la Fase 2: cada agente solo ve y modifica lo suyo. La
+Fase 8 la completa (Storage, Edge Functions, RGPD).
 
 ## Fases
 
