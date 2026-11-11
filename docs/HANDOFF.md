@@ -232,21 +232,47 @@ Historial de entregas por fase. Un bloque por fase, en orden.
   `/inmo-visitas/login`, `/inmo-visitas/registro`,
   `/inmo-visitas/perfil` y `/inmo-visitas/design-system`.
 - Supuestos tomados o pendientes:
-  - **Prueba de Auth en vivo PENDIENTE.** No se ha probado registro,
-    login, enlace mágico, reclamo de demo ni prueba negativa contra el
-    proyecto real: las migraciones 0003 y 0004 NO están aplicadas en el
-    proyecto de pruebas (con la clave anon no se puede aplicar DDL).
-    Queda pendiente de que Luis pegue
-    `docs/deploy/supabase-hasta-fase-2.sql` en el SQL Editor de un
-    proyecto nuevo y vacío, o 0003+0004 sobre una base con 0001+0002, y
-    de que Argo (el agente padre) haga después la prueba en vivo. Los
-    criterios de aceptación 1–5 del prompt no están verificados en vivo.
-  - **Confirmación de email sin verificar.** No se sabe si «Confirm
-    email» está activo en el proyecto de pruebas ni si usa SMTP propio.
-    El código cubre los dos casos (sesión inmediata o mensaje «Revisa
-    tu correo para confirmar la cuenta»), y el HANDOFF debe documentar
-    cómo se probó cuando se haga la prueba en vivo. El correo por
-    defecto de Supabase permite 2 emails/hora.
+  - **Prueba de Auth en vivo HECHA el 2026-11-11 (15/16 checks PASS, con
+    clave anon contra el proyecto real).** Migraciones aplicadas por Luis
+    en el SQL Editor (Success, 8 tablas). Anon sin sesión: `clients`
+    devuelve 0 filas. Login con contraseña de los 2 agentes OK. El
+    trigger crea la fila en `agents` al crear el usuario. El primer
+    agente ve los 6 clientes y las 8 propiedades de demo; el segundo ve
+    0 y 0. El agente B no puede leer ni modificar un cliente de A por
+    id, ni crear `visit_notes` sobre cliente de A («new row violates
+    row-level security policy for table "visit_notes"»), ni crear `tasks`
+    sobre una nota de A (misma violación en `tasks`); sí puede crear
+    `tasks` con `visit_note_id` null. El agente A crea `visit_notes`
+    propias y edita su perfil (full_name y phone). Incidencia en la
+    primera pasada (7/11): una cuenta fantasma de prueba creada antes
+    por Argo (`inmovisitas.prueba.a@gmail.com`) había reclamado los
+    datos de demo al ser el primer agente; se limpió (borrado de las 3
+    cuentas/agentes y `agent_id` a null) y se repitió la prueba con A
+    creado primero y B después: 15/16. Prueba de interfaz en la web
+    viva (navegador real, 2026-11-11 12:31–12:43): 5/5 — login con la
+    cuenta A, inicio con «Hola, Agente A Prueba», /perfil con edición
+    de nombre (probado: cambio, persistencia tras recargar y
+    restauración del nombre original), /design-system pública sin
+    sesión, y cierre de sesión con vuelta a /login y /perfil
+    redirigiendo a /login. Incidencia menor: el primer intento de
+    login usó por error el login guardado de pluton2408@hotmail.com
+    (sin «+agente-a») y dio «Credenciales incorrectas»; con las
+    credenciales exactas de la cuenta de prueba entró sin problema.
+    El único check que falta es el enlace mágico (ver punto siguiente).
+  - **Confirmación de email ACTIVADA (por defecto, sin interruptor
+    visible en el panel actual).** El registro por correo no da sesión
+    inmediata: el usuario queda pendiente de confirmar. El correo
+    integrado de Supabase solo permite 2 emails/hora por proyecto
+    (docs oficiales): la primera prueba gastó el presupuesto y el
+    registro de las cuentas de prueba devolvió «email rate limit
+    exceeded». Las cuentas de prueba se crearon desde el panel
+    (Authentication → Users → Create new user, con «Auto Confirm
+    User»), sin gastar emails. **Enlace mágico PENDIENTE:** `signInWithOtp`
+    con `emailRedirectTo` de Pages devuelve «email rate limit
+    exceeded»; se reintentará cuando se libere el límite (~13:11 del
+    2026-11-11). El código pasa `emailRedirectTo` en `signUp` y en
+    `signInWithOtp`, y la Site URL y las Redirect URLs ya están
+    configuradas (ver punto siguiente).
   - **SQL verificado por lectura, no por ejecución.** No hay Postgres
     local en esta máquina para ejecutar las migraciones (ni `psql` ni
     Docker). La sintaxis sigue los mismos patrones que 0001 (verificada
@@ -262,15 +288,19 @@ Historial de entregas por fase. Un bloque por fase, en orden.
     8 propiedades y 6 clientes seed; un segundo agente no ve ninguno.
     Es SOLO DEMO y hay que eliminarlo antes de producción (comentario
     en el SQL).
-  - **Despliegue en Pages NO hecho en esta fase.** El commit local no
-    incluye push a GitHub ni actualización de `gh-pages`: lo hace el
-    agente padre después. El build de Pages está verificado en local
-    (base `/inmo-visitas/`, 404.html copiado de index.html para las
-    rutas directas), pero la web viva aún sirve la Fase 1.
-  - **Site URL y Redirect URLs pendientes en Supabase:** hay que poner
-    Site URL = http://localhost:5173 y añadir
-    https://luisetic.github.io/inmo-visitas/ en Redirect URLs para que
-    el enlace mágico funcione en local y en Pages (ver .env.example).
+  - **Despliegue en Pages HECHO y verificado en navegador real el
+    2026-11-11.** Push a `main` (commit 4f47b94, tag `v0.2-fase-2`) y
+    `gh-pages` actualizada con el build de Pages (base
+    `/inmo-visitas/`, `dist/404.html` copiado de `dist/index.html`).
+    Verificado: `/` redirige a `/login`, `/login` y `/registro` muestran
+    sus formularios (con enlace mágico en /login), `/design-system`
+    intacto. La primera pasada mostró la versión antigua por la caché
+    de Pages; tras 60 s se propagó la Fase 2.
+  - **Site URL y Redirect URLs CONFIGURADAS por Luis el 2026-11-11:**
+    Site URL = http://localhost:5173 (antes http://localhost:3000);
+    Redirect URLs = http://localhost:5173/** (ya existía, se conserva)
+    + https://luisetic.github.io/inmo-visitas/ +
+    https://luisetic.github.io/inmo-visitas/login.
   - Las migraciones 0003/0004 usan `drop policy if exists` y `create
     index if not exists`: se pueden volver a aplicar sin error si ya
     existen las políticas o los índices.
