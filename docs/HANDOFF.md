@@ -611,12 +611,15 @@ Cambios (aprobados por Luis el 2026-11-11):
   auth.uid()::text`): `visit_audio_select_own`, `visit_audio_insert_own`,
   `visit_audio_delete_own`. Sin política para `anon` y sin update.
   Archivo `docs/deploy/supabase-fase-4.sql` con solo la 0006 (0001–0005
-  sin tocar). **La 0006 NO está aplicada en Supabase todavía: la aplica
-  Luis en el SQL Editor** (ver «Cómo probarlo»).
+  sin tocar). La 0006 **está aplicada** en el Supabase de pruebas (Luis,
+  SQL Editor, 2026-11-11; bucket `visit-audio | false` comprobado).
+  *[Corregido en la revisión de Claude: el texto original decía «NO está
+  aplicada», escrito antes del despliegue.]*
 - RLS / Edge Functions activas: las 8 tablas sin cambios. `transcribe`
-  **NO está desplegada**: la despliega Luis desde el panel (Via Editor,
-  ver `supabase/functions/README.md`). Sin `service_role` en el cliente
-  ni en la función.
+  **está desplegada** (Luis, panel Via Editor, 2026-11-11; 404 a nota
+  inexistente, CORS 204 y conducto de voz 12/12 verificados). Sin
+  `service_role` en el cliente ni en la función. *[Corregido en la
+  revisión de Claude: el texto original decía «NO está desplegada».]*
 - Rutas/pantallas nuevas (todas privadas, `lazy`, dentro de
   `RequireAuth`): `/capturar` (sin parámetros; lección de la Fase 3: la
   ruta estática no usa `useParams`) y `/notas/:id` (ficha montada con
@@ -779,3 +782,48 @@ Cambios (aprobados por Luis el 2026-11-11):
 - Pendiente de Luis en el móvil: abrir `/inmuebles/nuevo` y comprobar
   que la referencia ya viene como V-55 y que el precio `285,000` se
   acepta y se muestra como `285.000`.
+
+---
+
+## Revisión de la Fase 4 (Claude, sin cambio de fase)
+
+Revisión del 2026-11-11 (`87b5de0..48e322f`, tag `v0.4-fase-4` + parche de
+la Fase 3), en Claude Code:
+
+- `npm ci`, `tsc --noEmit`, `npm test` (61/61), `npm run lint` (0 errores,
+  2 avisos previos de shadcn) y `npm run build` con base `/inmo-visitas/`
+  (trozo mayor 255 kB) sin errores. **`deno check
+  supabase/functions/transcribe/index.ts` OK** (Deno 2.9.6; pendiente del
+  HANDOFF resuelto).
+- Migraciones 0001–0006 en PostgreSQL 16 temporal con esquemas `auth` y
+  `storage` simulados, dos veces (idempotentes). Bucket privado, 10 MB, 5
+  tipos de audio, 3 políticas solo `authenticated`. **Prueba negativa en
+  Storage:** B ve 0 objetos de A, no sube en la carpeta de A, ni en la
+  raíz, ni en otro bucket, no borra los de A; `anon` ve 0.
+- Navegador (Chromium, 360 px, micrófono simulado, Supabase simulado):
+  grabación con contador, reproductor, guardado (nota `draft` → subida a
+  `<agent_id>/<nota>.webm` → `audio_url`), transcripción automática una
+  sola vez, 502 con «Reintentar transcripción» que funciona después,
+  corrección persistida, «No encontrado» con id ajeno, vendidos ocultos,
+  sin desbordamiento ni errores de consola; ninguna petición envía
+  `agent_id`. Parche de la Fase 3: `/inmuebles/nuevo` sugiere V-55 con
+  V-54 existente y `285,000` → `285.000` al salir del campo.
+- Chrome sube `audio/webm;codecs=opus` y el bucket admite `audio/webm`:
+  Supabase Storage quita los parámetros antes de comparar
+  (`src/storage/validators/mime-type.ts`), así que se acepta.
+- `gh-pages` contiene la Fase 4 y el parche; `404.html` = `index.html`.
+- **Verificado por Luis en el móvil (Pages, 2026-11-11):** voz real de
+  ~20 s grabada, transcrita y guardada como «Transcrita» (criterio 3);
+  micrófono bloqueado → mensaje y pestaña Texto operativa (criterio 4);
+  recarga de fichas de cliente y de nota sin 404 (criterio 9 de la Fase 3
+  y 11 de la Fase 4); alta de cliente e inmueble por la UI (Fase 3,
+  criterios 1 y 3). **Fase 4 cerrada.**
+- Mejoras menores, aplazadas a la Fase 9 (decisión de Luis: no tocar
+  código ahora):
+  - «Reintentar subida» tras un fallo parcial (audio subido pero
+    `audio_url` sin guardar) vuelve a subir con `upsert: false` y falla
+    siempre (`Capture.tsx`, `handleSaveAudio`): recordar la ruta subida y
+    saltarse la subida al reintentar.
+  - La URL firmada del audio se vuelve a pedir al terminar la
+    transcripción (efecto con `[note]`): depender solo de
+    `note.audio_url`.

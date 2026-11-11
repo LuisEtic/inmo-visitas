@@ -53,7 +53,9 @@ Normas del proyecto. Leer antes de tocar código, junto con
   (migración 0005).
 - Fase 3: CRUD de clientes e inmuebles + contacto (tag `v0.3-fase-3`),
   revisada por Claude con ajustes (altas por la UI arregladas).
-- Fase 4 (siguiente, solo cuando Luis lo pida): captura por voz y texto +
-  transcripción. Prompt en `docs/prompts/PROMPT-FASE-4.md`.
+- Fase 4: captura por voz y texto + transcripción (tag `v0.4-fase-4`,
+  migración 0006, Edge Function `transcribe`), cerrada y revisada.
+- Fase 5 (siguiente, solo cuando Luis lo pida): extracción con evidencia +
+  revisión y aprobación. Prompt en `docs/prompts/PROMPT-FASE-5.md`.
 - Lista de notas y borradores: Fase 6.
 - Cada pantalla se prueba en el navegador, no solo por API.
