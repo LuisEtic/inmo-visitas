@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { Button } from '../components/ui/button'
+import { PrivateNav } from '../components/PrivateNav'
 import { SupabaseMissingNotice } from '../components/SupabaseMissingNotice'
 import { useAuth } from '../lib/auth-context'
 import { supabase } from '../lib/supabase'
 
 /**
- * / (privada, inicio provisional de la Fase 2): saludo al agente y enlaces
- * a /perfil y a /design-system. Las pantallas de trabajo (captura, revisión,
- * pendientes) llegan en fases posteriores.
+ * / (privada, inicio): saludo al agente y enlaces a las secciones de
+ * trabajo: Clientes, Inmuebles, Perfil y sistema de diseño. La captura de
+ * notas llega en la Fase 4.
  */
 export default function Home() {
   const { user, supabaseConfigured, signOut } = useAuth()
@@ -47,47 +48,62 @@ export default function Home() {
   }
 
   return (
-    <main className="mx-auto max-w-4xl bg-bg px-4 py-12 text-text-primary">
-      <p className="font-mono text-xs text-text-secondary">
-        inmo-visitas · Fase 2
-      </p>
-      <h1 className="mt-2 text-2xl">Hola, {displayName ?? fallbackName}</h1>
-      <p className="mt-2 text-base text-text-secondary">
-        Notas de visita por voz o texto para agentes inmobiliarios.
-      </p>
+    <>
+      <PrivateNav />
+      <main className="mx-auto max-w-4xl bg-bg px-4 py-12 text-text-primary">
+        <p className="font-mono text-xs text-text-secondary">
+          inmo-visitas · Fase 3
+        </p>
+        <h1 className="mt-2 text-2xl">Hola, {displayName ?? fallbackName}</h1>
+        <p className="mt-2 text-base text-text-secondary">
+          Notas de visita por voz o texto para agentes inmobiliarios.
+        </p>
 
-      {!supabaseConfigured && (
-        <div className="mt-6">
-          <SupabaseMissingNotice />
+        {!supabaseConfigured && (
+          <div className="mt-6">
+            <SupabaseMissingNotice />
+          </div>
+        )}
+
+        <div className="mt-6 flex flex-wrap gap-4">
+          <Link
+            to="/clientes"
+            className="inline-block min-h-11 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white"
+          >
+            Clientes
+          </Link>
+          <Link
+            to="/inmuebles"
+            className="inline-block min-h-11 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white"
+          >
+            Inmuebles
+          </Link>
+          <Link
+            to="/perfil"
+            className="inline-block min-h-11 rounded-md border border-border bg-bg px-4 py-2 text-sm font-semibold text-text-primary"
+          >
+            Mi perfil
+          </Link>
+          <Link
+            to="/design-system"
+            className="inline-block min-h-11 rounded-md border border-border bg-bg px-4 py-2 text-sm font-semibold text-text-primary"
+          >
+            Ver sistema de diseño
+          </Link>
+          <Button
+            variant="secondary"
+            onClick={handleSignOut}
+            disabled={signingOut}
+          >
+            {signingOut ? 'Cerrando sesión…' : 'Cerrar sesión'}
+          </Button>
         </div>
-      )}
 
-      <div className="mt-6 flex flex-wrap gap-4">
-        <Link
-          to="/perfil"
-          className="inline-block rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white"
-        >
-          Mi perfil
-        </Link>
-        <Link
-          to="/design-system"
-          className="inline-block rounded-md border border-border bg-bg px-4 py-2 text-sm font-semibold text-text-primary"
-        >
-          Ver sistema de diseño
-        </Link>
-        <Button
-          variant="secondary"
-          onClick={handleSignOut}
-          disabled={signingOut}
-        >
-          {signingOut ? 'Cerrando sesión…' : 'Cerrar sesión'}
-        </Button>
-      </div>
-
-      <p className="mt-6 text-sm text-text-secondary">
-        Fase 2 — Acceso de agentes + RLS por agente. La captura de notas
-        llega en la Fase 4.
-      </p>
-    </main>
+        <p className="mt-6 text-sm text-text-secondary">
+          Fase 3 — CRUD de clientes e inmuebles + contacto. La captura de
+          notas llega en la Fase 4.
+        </p>
+      </main>
+    </>
   )
 }

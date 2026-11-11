@@ -1,15 +1,15 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { clientConfig } from '../config/client'
+import type { Database } from './database.types'
 
 /**
- * Cliente Supabase. En la Fase 1 no se usa: no hay autenticación, ni
- * consultas, ni RLS. Existe para que las fases posteriores solo tengan
- * que importar este módulo.
+ * Cliente Supabase, tipado con los tipos escritos a mano de
+ * `database.types.ts` (tablas clients, properties y agents).
  *
  * Si no hay variables de entorno configuradas, el cliente es `null`
  * en lugar de crearse con claves falsas.
  */
-export const supabase: SupabaseClient | null =
+export const supabase: SupabaseClient<Database> | null =
   clientConfig.supabaseUrl !== '' && clientConfig.supabaseAnonKey !== ''
-    ? createClient(clientConfig.supabaseUrl, clientConfig.supabaseAnonKey)
+    ? createClient<Database>(clientConfig.supabaseUrl, clientConfig.supabaseAnonKey)
     : null

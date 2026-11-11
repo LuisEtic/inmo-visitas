@@ -10,6 +10,10 @@ const Home = lazy(() => import('./pages/Home'))
 const Login = lazy(() => import('./pages/Login'))
 const Profile = lazy(() => import('./pages/Profile'))
 const Register = lazy(() => import('./pages/Register'))
+const Clients = lazy(() => import('./pages/Clients'))
+const ClientDetail = lazy(() => import('./pages/ClientDetail'))
+const Properties = lazy(() => import('./pages/Properties'))
+const PropertyDetail = lazy(() => import('./pages/PropertyDetail'))
 
 function PageFallback() {
   return (
@@ -51,6 +55,54 @@ function App() {
               element={
                 <RequireAuth>
                   <Profile />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/clientes"
+              element={
+                <RequireAuth>
+                  <Clients />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/clientes/nuevo"
+              element={
+                <RequireAuth>
+                  <ClientDetail />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/clientes/:id"
+              element={
+                <RequireAuth>
+                  <ClientDetail />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/inmuebles"
+              element={
+                <RequireAuth>
+                  <Properties />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/inmuebles/nuevo"
+              element={
+                <RequireAuth>
+                  <PropertyDetail />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/inmuebles/:id"
+              element={
+                <RequireAuth>
+                  <PropertyDetail />
                 </RequireAuth>
               }
             />

@@ -373,3 +373,150 @@ Cambios (aprobados por Luis: puntos 2, 4, 5, 6 y 7 de la revisión):
 - Sin cambiar (decisión de Luis): los emails de prueba del HANDOFF se
   mantienen mientras duren las pruebas. Criterio 5 (enlace mágico):
   verificado en Pages el 2026-11-11 (commit 5abb997); Fase 2 cerrada.
+
+---
+
+## HANDOFF FASE 3
+
+- Hecho: CRUD de clientes e inmuebles + datos de contacto (decisión de
+  contacto cerrada en `docs/prompts/PROMPT-FASE-3.md`). Validación y
+  normalización al guardar en el frontend con Zod
+  (`src/lib/contact.ts`): teléfono español de 9 dígitos → `+34…`,
+  email en minúsculas; sin restricción en la base (llega en la Fase 8).
+  Botones «Llamar» (`tel:`), «WhatsApp» (solo abre el chat con
+  `https://wa.me/…`, sin texto prellenado) y «Email» (`mailto:`), cada
+  uno solo si hay dato; el propietario solo tiene teléfono (no hay
+  columna de email de propietario y no se crea). La app no llama ni
+  envía nada por sí misma. Enviar borradores por WhatsApp sigue siendo
+  la Fase 7. Navegación privada (Inicio, Clientes, Inmuebles, Perfil)
+  en todas las pantallas privadas. Pruebas unitarias de los
+  normalizadores y de los esquemas con Vitest (`npm test`).
+- Tablas/columnas/políticas creadas o cambiadas: **ninguna**. Sin
+  migración nueva (0001–0005 sin tocar, como exige el prompt).
+- RLS/Edge Functions: sin cambios. No se envía `agent_id` desde el
+  frontend (lo pone la base con `default auth.uid()`); las políticas
+  de la Fase 2 hacen el resto. Sin Edge Functions.
+- Rutas/pantallas nuevas (todas privadas, `lazy`, dentro de
+  `RequireAuth`): `/clientes` (búsqueda por nombre/teléfono/email sin
+  tildes ni mayúsculas, contador «N clientes», tarjetas ordenadas por
+  nombre, insignia «Provisional»), `/clientes/nuevo` y `/clientes/:id`
+  (ficha: vista con botones de contacto, edición, borrado con
+  confirmación «¿Borrar a …? Esta acción no se puede deshacer.»;
+  id inexistente o de otro agente → «No encontrado»), `/inmuebles`
+  (búsqueda por referencia/dirección/ciudad/propietario, filtro por
+  estado Todos/Disponible/Reservado/Vendido, tarjetas ordenadas por
+  referencia con precio en formato español), `/inmuebles/nuevo` y
+  `/inmuebles/:id` (ficha con bloque «Propietario» y sus botones
+  Llamar/WhatsApp). `Home` enlaza a Clientes e Inmuebles y `Profile`
+  lleva la navegación. Errores de base traducidos a español:
+  23505 → «Ya tienes un inmueble con la referencia V-52» (con la
+  referencia real), 23503 → «No se puede borrar: tiene notas de
+  visita asociadas», 42501 → «No tienes permiso para esta acción».
+  Móvil primero: una columna, objetivos táctiles ≥ 44 px.
+- Dependencias nuevas: **vitest 5.1.0** (devDependency, `npm test` =
+  `vitest run`). Sin dependencias nuevas de producción.
+- Errores o warnings de build: `npx tsc --noEmit` sin errores;
+  `npm run build` sin errores en base `/` y con
+  `VITE_BASE_PATH=/inmo-visitas/`; `npm run lint` (oxlint) 0 errores
+  y 2 warnings, los previos de shadcn (`button.tsx` y `badge.tsx`,
+  `only-export-components`). Trozo JS mayor: **255 kB**
+  (`vendor-react`), por debajo de 500 kB. Dos avisos nuevos
+  (`set-state-in-effect` en las listas) se corrigieron inicializando
+  `loading` con su valor final cuando no hay Supabase; dos avisos
+  `only-export-components` por exportar los comparadores de búsqueda
+  desde las páginas se corrigieron moviéndolos a `src/lib/search.ts`.
+  Lección: las interfaces de TypeScript no son asignables a
+  `Record<string, unknown>` que exige el `GenericSchema` de
+  supabase-js, así que los tipos de fila de `database.types.ts` son
+  `type` (alias de objeto), no `interface`; con `interface`, los
+  `insert`/`update` tipados resolvían a `never` y el build fallaba.
+- Archivos creados: `src/lib/contact.ts` (+ `contact.test.ts`, 19
+  casos: normalización, formato, seed, extranjeros e inválidos),
+  `src/lib/database.types.ts` (tipos a mano de `clients`,
+  `properties` y `agents`: `Row`/`Insert`/`Update`),
+  `src/lib/db-errors.ts` (traducción 23505/23503/42501),
+  `src/lib/search.ts` (comparadores de búsqueda), `src/lib/utils.ts`
+  (+ `normalizeForSearch`, `digitsOnly`),
+  `src/features/clients/{schema,api}.ts` (+ `schema.test.ts`, 4
+  casos), `src/features/properties/{schema,api}.ts` (+
+  `schema.test.ts`, 3 casos), `src/components/ContactButtons.tsx`,
+  `src/components/PrivateNav.tsx`,
+  `src/features/clients/ClientForm.tsx`,
+  `src/features/properties/PropertyForm.tsx`, `src/pages/Clients.tsx`,
+  `src/pages/ClientDetail.tsx`, `src/pages/Properties.tsx`,
+  `src/pages/PropertyDetail.tsx`, `src/pages/search.test.ts` (5
+  casos de búsqueda). Modificados: `src/App.tsx` (6 rutas nuevas,
+  `lazy`), `src/pages/Home.tsx` (navegación + enlaces),
+  `src/pages/Profile.tsx` (navegación), `src/lib/supabase.ts`
+  (`createClient<Database>`), `package.json` + `package-lock.json`
+  (vitest + script `test`).
+- Supuestos tomados o pendientes:
+  - El teléfono del seed (`+34 612 345 678`) se acepta en lectura y
+    se muestra formateado (`612 34 56 78`); se normaliza al editar y
+    guardar. Los teléfonos extranjeros en E.164 se guardan tal cual.
+  - `formatPriceEs` usa `Intl.NumberFormat('es-ES', { style:
+    'currency', currency: 'EUR', maximumFractionDigits: 0 })` y
+    sustituye el espacio de no separación (U+00A0) que emite
+    `Intl` por un espacio normal, para que el texto sea «230.000 €».
+  - La referencia se guarda en mayúsculas y el precio se parsea con
+    formato español (`230.000` → 230000, `230.000,50` → 230000.5).
+  - El borrado de un cliente o inmueble con notas de visita asociadas
+    lo bloquea la base (23503) y la UI traduce el mensaje; no hay
+    borrado en cascada.
+- Cómo probarlo (en vivo contra el proyecto de pruebas, 2026-11-11,
+  con la clave anon; agentes de prueba
+  pluton2408+agente-a@hotmail.com y pluton2408+agente-b@hotmail.com;
+  las contraseñas NO se escriben aquí, como en la Fase 2):
+  - Criterio 1 ✅: A ve 6 clientes + 8 inmuebles; crea a Irene Castro
+    Vidal (teléfono `612.34.56.78` → guardado `+34612345678`,
+    mostrado `612 34 56 78`; email `Irene.Castro@Example.com` →
+    `irene.castro@example.com`) y V-52 (`v-52` → `V-52`, `285.000` →
+    285000, «285.000 €», propietario Rafael Gil Moreno,
+    `+34 699 11 22 33` → `+34699112233`, Disponible).
+  - Criterio 2 ✅: A edita el teléfono de Ana García (a
+    `+34612345679`) y el estado de V-07 (a Vendido); ambos persisten
+    tras releer; después se restauraron los valores del seed (teléfono
+    `+34 612 345 678`, V-07 Reservado) y se verificó la restauración.
+  - Criterio 3 ✅: A intenta otro V-52 → «Ya tienes un inmueble con
+    la referencia V-52»; B crea su propio V-52 y su propio V-18.
+  - Criterio 4 ✅: B ve 0 clientes y 0 inmuebles de A (antes de crear
+    los suyos); abrir `/clientes/<id de Ana>` como B devuelve
+    «No encontrado» (la API devuelve null por RLS).
+  - Criterio 5 ✅: borrar a Irene funciona (desaparece); se creó una
+    nota de visita de prueba como A sobre David Romero (inmueble
+    V-12, texto «Nota de prueba Fase 3», estado draft) y borrar a
+    David muestra «No se puede borrar: tiene notas de visita
+    asociadas» y el cliente sigue ahí.
+  - Criterio 6 ✅ (lógica): la búsqueda «garcia» encuentra a
+    «Ana García» y el filtro Reservado solo muestra reservados,
+    cubiertos por pruebas unitarias de `matchesClientQuery` /
+    `matchesPropertyQuery` en `src/pages/search.test.ts`. La
+    interacción en la UI (escribir en el buscador, pulsar el filtro)
+    queda pendiente de verificar en el navegador.
+  - Criterio 7 ⚠️ parcial: teléfono inválido `12345` no guarda y el
+    formulario dice «Teléfono no válido» (prueba unitaria del esquema
+    de cliente); los botones solo aparecen si hay dato (los `href`
+    devuelven `null` sin dato o con dato inválido, probado en
+    `contact.test.ts`); que «Llamar» abra el marcador, «WhatsApp» el
+    chat sin texto y «Email» el correo, y que no haya desbordamiento
+    horizontal a 360 px, son comprobaciones de móvil real pendientes
+    (sin navegador en esta fase).
+  - Criterio 8 ✅: `npm test` — 31 pruebas en 4 archivos, todas en
+    verde (19 de `contact.ts`, 4 del esquema de cliente, 3 del
+    esquema de inmueble, 5 de búsqueda), incluidos los casos del seed
+    y los inválidos.
+  - Criterio 9 ⚠️ parcial: las rutas nuevas funcionan en local y la
+    build con base `/inmo-visitas/` genera los activos bajo
+    `/inmo-visitas/` con `dist/404.html` = `index.html`; la
+    comprobación en Pages (`/inmuebles`, recarga en `/clientes/<id>`)
+    queda para el despliegue (lo hace el padre, sin gh-pages en esta
+    fase).
+  - Criterio 10 ✅: `npm test` 31/31, `npx tsc --noEmit` sin errores,
+    `npm run build` sin errores en ambas bases, `npm run lint` 0
+    errores (2 warnings previos de shadcn), trozo mayor 255 kB.
+  - Datos de prueba que QUEDAN en el proyecto: V-52 del agente A,
+    V-52 y V-18 del agente B, y la nota de visita de prueba sobre
+    David Romero (V-12, draft). Borrados: Irene Castro Vidal; el
+    V-18 de B de la comprobación de la 0005 ya estaba borrado.
+    Ana García y V-07 quedaron con sus valores del seed. No se
+    borraron las cuentas de prueba.

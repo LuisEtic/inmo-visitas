@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
+import { PrivateNav } from '../components/PrivateNav'
 import { SupabaseMissingNotice } from '../components/SupabaseMissingNotice'
 import { useAuth } from '../lib/auth-context'
 import { mapAuthErrorMessage } from '../lib/auth-errors'
@@ -113,11 +114,13 @@ export default function Profile() {
   }
 
   return (
-    <main className="mx-auto max-w-md bg-bg px-4 py-12 text-text-primary">
-      <p className="font-mono text-xs text-text-secondary">
-        inmo-visitas · Fase 2
-      </p>
-      <h1 className="mt-2 text-2xl">Mi perfil</h1>
+    <>
+      <PrivateNav />
+      <main className="mx-auto max-w-md bg-bg px-4 py-12 text-text-primary">
+        <p className="font-mono text-xs text-text-secondary">
+          inmo-visitas · Fase 3
+        </p>
+        <h1 className="mt-2 text-2xl">Mi perfil</h1>
       <p className="mt-2 text-base text-text-secondary">
         Tu identidad como agente. Solo tú ves y editas estos datos.
       </p>
@@ -202,6 +205,7 @@ export default function Profile() {
           {signingOut ? 'Cerrando sesión…' : 'Cerrar sesión'}
         </button>
       </div>
-    </main>
+      </main>
+    </>
   )
 }
