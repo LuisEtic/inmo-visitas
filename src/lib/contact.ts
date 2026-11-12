@@ -11,7 +11,8 @@ import { z } from 'zod'
  *   con otro formato (el seed, `+34 611 100 200`) se aceptan al leer, se
  *   muestran formateados y se normalizan cuando se edita y guarda la ficha.
  * - Los botones solo aparecen si hay dato. WhatsApp solo abre el chat con
- *   `wa.me`, sin texto precargado: no envía nada (eso es la Fase 7).
+ *   `wa.me`, con el texto ya escrito si se le pasa (Fase 7): no envía nada,
+ *   el agente pulsa «Enviar» en WhatsApp.
  */
 
 const PHONE_ERROR = 'Teléfono no válido'
@@ -107,18 +108,36 @@ export function telHref(phone: string | null | undefined): string | null {
 /**
  * Enlace `https://wa.me/…` para un teléfono, o `null` si no hay dato o no
  * es válido. Solo dígitos, sin `+`, sin espacios. Acepta también teléfonos
- * sin normalizar (seed). Solo abre el chat: no envía texto (Fase 7).
+ * sin normalizar (seed). Con `text`, añade `?text=` con el texto
+ * codificado (Fase 7: borradores aprobados y ficha): solo abre el chat
+ * con el texto ya escrito, no envía nada. Sin `text`, igual que en la
+ * Fase 3 (los botones de contacto no cambian).
  */
-export function whatsappHref(phone: string | null | undefined): string | null {
+export function whatsappHref(
+  phone: string | null | undefined,
+  text?: string,
+): string | null {
   if (phone === null || phone === undefined || phone.trim() === '') {
     return null
   }
   try {
     const normalized = normalizePhone(phone)
-    return `https://wa.me/${normalized.slice(1)}`
+    const base = `https://wa.me/${normalized.slice(1)}`
+    if (text === undefined || text === '') {
+      return base
+    }
+    return `${base}?text=${encodeURIComponent(text)}`
   } catch {
     return null
   }
+}
+
+/**
+ * Enlace `https://wa.me/?text=…` sin número: el agente elige el chat al
+ * abrirlo. Se usa para la ficha cuando el CRM es `whatsapp` (Fase 7).
+ */
+export function whatsappShareHref(text: string): string {
+  return `https://wa.me/?text=${encodeURIComponent(text)}`
 }
 
 /**

@@ -1,33 +1,37 @@
 import { z } from 'zod'
 import type { CrmTarget } from '../../config/client'
+import type { VisitSummary } from '../../features/export/summary'
 
 /** Destinos de exportación de una nota de visita (tabla `crm_exports`). */
 export const crmTargetSchema = z.enum(['inmovilla', 'witei', 'whatsapp', 'manual'])
 
-export const visitNoteExportPayloadSchema = z.object({
-  visitNoteId: z.string().uuid(),
-  clientName: z.string().min(1),
-  propertyReference: z.string().min(1),
-  summary: z.string(),
-})
-
-export type VisitNoteExportPayload = z.infer<typeof visitNoteExportPayloadSchema>
+/** Entrada de una exportación: la nota y su ficha ya construida. */
+export type VisitNoteExportInput = {
+  visitNoteId: string
+  summary: VisitSummary
+}
 
 export interface CrmExportResult {
   ok: boolean
+  status?: 'enviado' | 'entregado' | 'error'
+  exportId?: string
   externalId?: string
+  simulated?: boolean
+  /** Enlace a abrir (WhatsApp) cuando la entrega es por enlace. */
+  href?: string
   error?: string
 }
 
 /**
  * Interfaz común de todos los adaptadores CRM.
  * Añadir un CRM = añadir un archivo con esta interfaz, sin tocar el resto.
- * En la Fase 1 todos los adaptadores son stubs: devuelven
- * `ok: false` con "No implementado en Fase 1". La lógica real llega
- * en la fase de exportación.
+ * Desde la Fase 7 ya no son *stubs*: `inmovilla` y `witei` llaman a la
+ * Edge Function `crm-export` (modo simulado mientras no haya acceso real
+ * a sus API); `manual` copia la ficha y `whatsapp` la comparte, y ambos
+ * registran la entrega en `crm_exports`.
  */
 export interface CrmAdapter {
   readonly target: CrmTarget
   readonly label: string
-  exportVisitNote(payload: VisitNoteExportPayload): Promise<CrmExportResult>
+  exportVisitNote(input: VisitNoteExportInput): Promise<CrmExportResult>
 }

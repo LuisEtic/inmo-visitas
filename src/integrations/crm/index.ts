@@ -17,4 +17,4 @@ export function getCrmAdapter(target: CrmTarget): CrmAdapter {
 }
 
 export { crmTargetSchema } from './types'
-export type { CrmAdapter, CrmExportResult, VisitNoteExportPayload } from './types'
+export type { CrmAdapter, CrmExportResult, VisitNoteExportInput } from './types'

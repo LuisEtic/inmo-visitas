@@ -12,7 +12,8 @@ import { APP_PHASE_LABEL } from '../lib/app-label'
  * / (privada, inicio): saludo al agente y enlaces a las secciones de
  * trabajo: Capturar, Clientes, Inmuebles, Notas, Pendientes, Perfil y
  * sistema de diseño. La captura de notas llega en la Fase 4; los
- * borradores duales y la bandeja de pendientes, en la Fase 6.
+ * borradores duales y la bandeja de pendientes, en la Fase 6; la
+ * exportación al CRM y WhatsApp, en la Fase 7.
  */
 export default function Home() {
   const { user, supabaseConfigured, signOut } = useAuth()
@@ -131,7 +132,7 @@ export default function Home() {
         </div>
 
         <p className="mt-6 text-sm text-text-secondary">
-          Fase 6 — Borradores duales + bandeja de pendientes.
+          Fase 7 — Exportación al CRM y WhatsApp.
         </p>
       </main>
     </>

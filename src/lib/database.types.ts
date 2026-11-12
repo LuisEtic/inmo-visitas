@@ -256,6 +256,58 @@ export type DraftUpdate = {
   status?: DraftStatus
 }
 
+export type CrmExportStatus = 'pendiente' | 'enviado' | 'error' | 'entregado'
+
+export type CrmExportKind = 'nota' | 'borrador'
+
+export type CrmExportTarget = 'inmovilla' | 'witei' | 'whatsapp' | 'manual'
+
+/**
+ * Exportación de una nota (Fase 7, migración 0010). Registro de solo
+ * inserción: cada intento es una fila nueva; una fila cerrada
+ * (`enviado`, `error`, `entregado`) no cambia. `kind = 'nota'` lleva
+ * la ficha de la visita; `kind = 'borrador'` lleva un borrador
+ * aprobado (solo WhatsApp), con su `draft_id` y `audience`.
+ * `entregado` = la app se la dio al agente (WhatsApp abierto, ficha
+ * copiada); la app NO sabe si llegó a enviarse. `enviado` solo lo usa
+ * el CRM. `error_message` es genérico, en español y sin datos
+ * personales (≤ 300 caracteres).
+ */
+export type CrmExportRow = {
+  id: string
+  visit_note_id: string
+  target: CrmExportTarget
+  kind: CrmExportKind
+  draft_id: string | null
+  audience: DraftAudience | null
+  payload: Record<string, unknown> | null
+  status: CrmExportStatus
+  external_id: string | null
+  error_message: string | null
+  exported_at: string | null
+  created_at: string
+  updated_at: string | null
+}
+
+export type CrmExportInsert = {
+  visit_note_id: string
+  target: CrmExportTarget
+  kind?: CrmExportKind
+  draft_id?: string | null
+  audience?: DraftAudience | null
+  payload?: Record<string, unknown> | null
+  status: CrmExportStatus
+  external_id?: string | null
+  error_message?: string | null
+}
+
+export type CrmExportUpdate = {
+  status?: CrmExportStatus
+  external_id?: string | null
+  error_message?: string | null
+  payload?: Record<string, unknown> | null
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -351,6 +403,27 @@ export interface Database {
             columns: ['visit_note_id']
             isOneToOne: false
             referencedRelation: 'visit_notes'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      crm_exports: {
+        Row: CrmExportRow
+        Insert: CrmExportInsert
+        Update: CrmExportUpdate
+        Relationships: [
+          {
+            foreignKeyName: 'crm_exports_visit_note_id_fkey'
+            columns: ['visit_note_id']
+            isOneToOne: false
+            referencedRelation: 'visit_notes'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'crm_exports_draft_id_fkey'
+            columns: ['draft_id']
+            isOneToOne: false
+            referencedRelation: 'drafts'
             referencedColumns: ['id']
           },
         ]

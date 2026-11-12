@@ -10,6 +10,13 @@ import { getClient } from '../features/clients/api'
 import { getProperty } from '../features/properties/api'
 import { validateNoteText } from '../features/capture/audio'
 import {
+  exportToCrm,
+  listNoteExports,
+  loadExportContext,
+  type ExportContext,
+} from '../features/export/api'
+import { recordDelivery } from '../features/export/deliveries'
+import {
   addFact,
   approveNote,
   extractNote,
@@ -48,9 +55,14 @@ import {
   transcribeNote,
   updateNoteText,
 } from '../features/notes/api'
-import { formatPhone } from '../lib/contact'
+import { clientConfig } from '../config/client'
+import { getCrmAdapter } from '../integrations/crm'
+import type { CrmExportResult } from '../integrations/crm/types'
+import { formatPhone, whatsappHref } from '../lib/contact'
 import type {
   ClientRow,
+  CrmExportRow,
+  CrmExportStatus,
   DraftAudience,
   DraftRow,
   ExtractedFactRow,
@@ -66,6 +78,24 @@ const noteDateFormatter = new Intl.DateTimeFormat('es-ES', {
   dateStyle: 'medium',
   timeStyle: 'short',
 })
+
+/** Estados legibles del historial de exportaciones (Fase 7). */
+const EXPORT_STATUS_LABELS: Record<CrmExportStatus, string> = {
+  pendiente: 'En curso',
+  enviado: 'Enviada',
+  error: 'Error',
+  entregado: 'Entregada al agente',
+}
+
+/** Qué se llevó fuera en cada fila del historial. */
+function exportKindLabel(row: CrmExportRow): string {
+  if (row.kind === 'nota') {
+    return 'Ficha'
+  }
+  return row.audience === 'comprador'
+    ? 'Borrador al comprador'
+    : 'Borrador al propietario'
+}
 
 function countText(count: number, singular: string, plural: string): string {
   return `${count} ${count === 1 ? singular : plural}`
@@ -83,6 +113,10 @@ function countText(count: number, singular: string, plural: string): string {
  *   junto a su cita resaltada en el texto; aceptar, editar, descartar,
  *   recuperar y añadir; «Volver a extraer» y «Aprobar nota». Tras
  *   aprobar, todo queda en solo lectura (también «Corregir»).
+ * - Seguimiento (Fase 6): borradores y tareas de la nota aprobada.
+ * - Exportación (Fase 7): «Abrir en WhatsApp» en cada borrador
+ *   aprobado y sección «Exportar» con la ficha, el botón del CRM y el
+ *   historial.
  * - Id inexistente o de otro agente → «No encontrado» (RLS).
  */
 export default function NoteDetail() {
@@ -185,6 +219,24 @@ function NoteDetailView({ id }: { id: string | undefined }) {
   const [addTaskError, setAddTaskError] = useState<string | null>(null)
   const [addingTask, setAddingTask] = useState(false)
 
+  // Exportación (Fase 7): WhatsApp de los borradores aprobados y ficha
+  // al CRM (o copiada, o por WhatsApp). Solo con la nota aprobada.
+  const [exports, setExports] = useState<CrmExportRow[] | null>(null)
+  const [exportContext, setExportContext] = useState<ExportContext | null>(null)
+  const [exportLoadError, setExportLoadError] = useState<string | null>(null)
+  const [whatsappNotice, setWhatsappNotice] = useState<{
+    draftId: string
+    message: string
+  } | null>(null)
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
+  const [exportResult, setExportResult] = useState<CrmExportResult | null>(null)
+  const [exportSharedHref, setExportSharedHref] = useState<string | null>(null)
+  const [showSummaryPreview, setShowSummaryPreview] = useState(false)
+  const [showExportsHistory, setShowExportsHistory] = useState(false)
+  const [copySummaryNotice, setCopySummaryNotice] = useState(false)
+  const [copySummaryError, setCopySummaryError] = useState<string | null>(null)
+
   async function loadFollowUp(noteId: string) {
     try {
       const [draftRows, taskRows] = await Promise.all([
@@ -204,6 +256,35 @@ function NoteDetailView({ id }: { id: string | undefined }) {
           ? error.message
           : 'No se ha podido cargar el seguimiento.',
       )
+    }
+  }
+
+  async function loadExport(noteId: string) {
+    try {
+      const [rows, context] = await Promise.all([
+        listNoteExports(noteId),
+        loadExportContext(noteId),
+      ])
+      setExports(rows)
+      setExportContext(context)
+      setExportLoadError(null)
+    } catch (error: unknown) {
+      setExportLoadError(
+        error instanceof Error
+          ? error.message
+          : 'No se ha podido cargar la exportación.',
+      )
+    }
+  }
+
+  async function refreshExports() {
+    if (note === null) {
+      return
+    }
+    try {
+      setExports(await listNoteExports(note.id))
+    } catch {
+      // Se mantiene el historial anterior; el error ya se vio al exportar.
     }
   }
 
@@ -245,6 +326,7 @@ function NoteDetailView({ id }: { id: string | undefined }) {
           })
         if (row.status === 'approved') {
           void loadFollowUp(row.id)
+          void loadExport(row.id)
         }
       })
       .catch((error: unknown) => {
@@ -779,6 +861,100 @@ function NoteDetailView({ id }: { id: string | undefined }) {
     }
   }
 
+  /**
+   * Registra que el agente abrió WhatsApp con un borrador aprobado.
+   * No bloquea la apertura: el enlace ya se está abriendo; si el
+   * registro falla, aviso discreto en la tarjeta.
+   */
+  async function handleOpenDraftWhatsApp(draft: DraftRow) {
+    if (note === null) {
+      return
+    }
+    try {
+      const row = await recordDelivery({
+        noteId: note.id,
+        target: 'whatsapp',
+        kind: 'borrador',
+        draftId: draft.id,
+        audience: draft.audience,
+      })
+      setExports((previous) => (previous === null ? [row] : [row, ...previous]))
+      setWhatsappNotice(null)
+    } catch {
+      setWhatsappNotice({
+        draftId: draft.id,
+        message: 'No se pudo registrar el envío',
+      })
+    }
+  }
+
+  /** Botón principal de «Exportar» según el CRM configurado. */
+  async function handleExportMain() {
+    if (note === null) {
+      return
+    }
+    setExporting(true)
+    setExportError(null)
+    setExportResult(null)
+    setExportSharedHref(null)
+    setCopySummaryNotice(false)
+    try {
+      const result = await exportToCrm(note.id, clientConfig.crmTarget)
+      setExportResult(result)
+      if (!result.ok) {
+        setExportError(result.error ?? 'No se ha podido exportar la ficha.')
+        return
+      }
+      if (result.href !== undefined) {
+        // WhatsApp: se abre el enlace devuelto por el adaptador. Si el
+        // navegador lo bloquea, queda el enlace en el estado de éxito.
+        setExportSharedHref(result.href)
+        window.open(result.href, '_blank', 'noopener')
+      }
+      await refreshExports()
+    } catch (error: unknown) {
+      setExportError(
+        error instanceof Error
+          ? error.message
+          : 'No se ha podido exportar la ficha.',
+      )
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  /** Acción secundaria «Copiar ficha»: copia y registra `manual`. */
+  async function handleCopySummary() {
+    if (note === null) {
+      return
+    }
+    setExporting(true)
+    setCopySummaryError(null)
+    setCopySummaryNotice(false)
+    try {
+      const result = await exportToCrm(note.id, 'manual')
+      if (result.ok) {
+        setCopySummaryNotice(true)
+        await refreshExports()
+      } else {
+        // La ficha no se pudo copiar: se muestra para copiarla a mano.
+        setCopySummaryError(
+          result.error ?? 'No se ha podido copiar la ficha.',
+        )
+        setShowSummaryPreview(true)
+      }
+    } catch (error: unknown) {
+      setCopySummaryError(
+        error instanceof Error
+          ? error.message
+          : 'No se ha podido copiar la ficha.',
+      )
+      setShowSummaryPreview(true)
+    } finally {
+      setExporting(false)
+    }
+  }
+
   async function handleApproveDraft(draft: DraftRow) {
     setApprovingDraft(true)
     setDraftEditError(null)
@@ -883,6 +1059,30 @@ function NoteDetailView({ id }: { id: string | undefined }) {
     (draft) => draft.status === 'aprobado',
   )
   const hasFollowUp = draftsList.length > 0 || tasksList.length > 0
+
+  // Exportación (Fase 7): el historial llega en orden descendente,
+  // así que `find` da la última fila de cada tipo.
+  const exportsList = exports ?? []
+  const noteExported = exportsList.some(
+    (row) =>
+      row.kind === 'nota' &&
+      (row.status === 'enviado' || row.status === 'entregado'),
+  )
+  const lastWhatsappByAudience = (audience: DraftAudience) =>
+    exportsList.find(
+      (row) =>
+        row.target === 'whatsapp' &&
+        row.kind === 'borrador' &&
+        row.audience === audience,
+    )
+  const buyerWhatsappOpened =
+    lastWhatsappByAudience('comprador') !== undefined
+  const ownerWhatsappOpened =
+    lastWhatsappByAudience('propietario') !== undefined
+  const latestExportRow =
+    exportResult?.exportId !== undefined
+      ? exportsList.find((row) => row.id === exportResult.exportId)
+      : undefined
 
   const selectedFact =
     factsList.find((fact) => fact.id === selectedFactId) ?? null
@@ -1124,6 +1324,20 @@ function NoteDetailView({ id }: { id: string | undefined }) {
     }
 
     const isApproved = draft.status === 'aprobado'
+    // WhatsApp (Fase 7): solo con el borrador aprobado. Comprador →
+    // teléfono del cliente; propietario → teléfono del propietario.
+    // Sin teléfono válido no hay enlace: botón desactivado y enlace a
+    // la ficha para añadirlo.
+    const draftPhone =
+      audience === 'comprador'
+        ? (client?.phone ?? null)
+        : (property?.owner_phone ?? null)
+    const draftWhatsappHref = isApproved
+      ? whatsappHref(draftPhone, draft.content)
+      : null
+    const lastWhatsapp = isApproved
+      ? lastWhatsappByAudience(audience)
+      : undefined
     return (
       <article
         key={draft.id}
@@ -1237,7 +1451,55 @@ function NoteDetailView({ id }: { id: string | undefined }) {
                 Copiado
               </span>
             )}
+            {draftWhatsappHref !== null ? (
+              <Button asChild variant="secondary" size="lg">
+                <a
+                  href={draftWhatsappHref}
+                  target="_blank"
+                  rel="noopener"
+                  onClick={() => void handleOpenDraftWhatsApp(draft)}
+                >
+                  Abrir en WhatsApp
+                </a>
+              </Button>
+            ) : (
+              <>
+                <Button variant="secondary" size="lg" disabled>
+                  Falta el teléfono
+                </Button>
+                {audience === 'comprador' && client !== null && (
+                  <Link
+                    to={`/clientes/${client.id}`}
+                    className="self-center text-sm font-semibold underline"
+                  >
+                    Añadir teléfono en la ficha del cliente
+                  </Link>
+                )}
+                {audience === 'propietario' && property !== null && (
+                  <Link
+                    to={`/inmuebles/${property.id}`}
+                    className="self-center text-sm font-semibold underline"
+                  >
+                    Añadir teléfono en la ficha del inmueble
+                  </Link>
+                )}
+              </>
+            )}
           </div>
+        )}
+        {isApproved && lastWhatsapp !== undefined && (
+          <p className="mt-2 text-sm text-text-secondary">
+            Abierto en WhatsApp el{' '}
+            {noteDateFormatter.format(new Date(lastWhatsapp.created_at))}
+          </p>
+        )}
+        {isApproved && (
+          <p className="mt-2 text-sm text-text-secondary">
+            Revisa y pulsa Enviar en WhatsApp: la app no lo envía por ti.
+          </p>
+        )}
+        {whatsappNotice?.draftId === draft.id && (
+          <p className="mt-2 text-sm text-error">{whatsappNotice.message}</p>
         )}
         {!isApproved && (
           <div className="mt-4 flex flex-wrap gap-2">
@@ -2138,6 +2400,11 @@ function NoteDetailView({ id }: { id: string | undefined }) {
                       {' · '}Borradores: {countText(editedDrafts.length, 'editado', 'editados')} ·{' '}
                       {countText(approvedDrafts.length, 'aprobado', 'aprobados')}
                     </p>
+                    <p className="mt-2 text-sm text-text-secondary">
+                      Exportada: {noteExported ? 'sí' : 'no'} · WhatsApp
+                      abierto: comprador {buyerWhatsappOpened ? 'sí' : 'no'},
+                      propietario {ownerWhatsappOpened ? 'sí' : 'no'}
+                    </p>
                     {acceptedTasks.length > 0 && (
                       <p className="mt-2 text-sm">
                         <Link to="/pendientes" className="font-semibold underline">
@@ -2145,6 +2412,200 @@ function NoteDetailView({ id }: { id: string | undefined }) {
                         </Link>
                       </p>
                     )}
+                  </>
+                )}
+              </section>
+            )}
+
+            {isApproved && (
+              <section className="mt-8" aria-labelledby="nota-exportar">
+                <h2 id="nota-exportar" className="text-lg font-semibold">
+                  Exportar
+                </h2>
+
+                {exportLoadError !== null && (
+                  <p className="mt-3 text-sm text-error">{exportLoadError}</p>
+                )}
+
+                {exportContext !== null && (
+                  <>
+                    <div className="mt-3">
+                      <Button
+                        variant="secondary"
+                        size="lg"
+                        onClick={() =>
+                          setShowSummaryPreview((value) => !value)
+                        }
+                        aria-expanded={showSummaryPreview}
+                      >
+                        Vista previa de la ficha
+                      </Button>
+                      {showSummaryPreview && (
+                        <pre className="mt-3 overflow-x-auto rounded-md border border-border px-4 py-3 text-sm whitespace-pre-wrap break-words">
+                          {exportContext.summary.text}
+                        </pre>
+                      )}
+                    </div>
+
+                    <div className="mt-6 flex flex-wrap gap-3">
+                      {clientConfig.crmTarget === 'manual' ? (
+                        <Button
+                          size="lg"
+                          onClick={() => void handleCopySummary()}
+                          disabled={exporting}
+                        >
+                          {exporting
+                            ? 'Copiando…'
+                            : copySummaryNotice
+                              ? 'Ficha copiada'
+                              : 'Copiar ficha'}
+                        </Button>
+                      ) : clientConfig.crmTarget === 'whatsapp' ? (
+                        <Button
+                          size="lg"
+                          onClick={() => void handleExportMain()}
+                          disabled={exporting}
+                        >
+                          {exporting
+                            ? 'Compartiendo…'
+                            : 'Compartir ficha por WhatsApp'}
+                        </Button>
+                      ) : exportResult?.ok === true &&
+                        latestExportRow !== undefined ? (
+                        <>
+                          <p className="text-base">
+                            Exportada a{' '}
+                            {getCrmAdapter(clientConfig.crmTarget).label} el{' '}
+                            {noteDateFormatter.format(
+                              new Date(
+                                latestExportRow.exported_at ??
+                                  latestExportRow.created_at,
+                              ),
+                            )}
+                            {latestExportRow.external_id !== null &&
+                              latestExportRow.external_id !== '' &&
+                              ` (ID ${latestExportRow.external_id})`}
+                          </p>
+                          {exportResult.simulated === true && (
+                            <Badge variant="neutral">Simulado</Badge>
+                          )}
+                          <Button
+                            variant="secondary"
+                            size="lg"
+                            onClick={() => void handleExportMain()}
+                            disabled={exporting}
+                          >
+                            Volver a exportar
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          size="lg"
+                          onClick={() => void handleExportMain()}
+                          disabled={exporting}
+                        >
+                          {exporting
+                            ? 'Exportando…'
+                            : `Exportar a ${getCrmAdapter(clientConfig.crmTarget).label}`}
+                        </Button>
+                      )}
+                      {clientConfig.crmTarget !== 'manual' && (
+                        <Button
+                          variant="secondary"
+                          size="lg"
+                          onClick={() => void handleCopySummary()}
+                          disabled={exporting}
+                        >
+                          {copySummaryNotice ? 'Ficha copiada' : 'Copiar ficha'}
+                        </Button>
+                      )}
+                    </div>
+
+                    {exportResult?.ok === true &&
+                      clientConfig.crmTarget === 'whatsapp' &&
+                      exportSharedHref !== null && (
+                        <p className="mt-3 text-sm">
+                          Compartida por WhatsApp.{' '}
+                          <a
+                            href={exportSharedHref}
+                            target="_blank"
+                            rel="noopener"
+                            className="font-semibold underline"
+                          >
+                            Abrir WhatsApp
+                          </a>
+                        </p>
+                      )}
+
+                    {exportError !== null && (
+                      <div className="mt-3">
+                        <p className="text-sm text-error">{exportError}</p>
+                        <Button
+                          variant="secondary"
+                          size="lg"
+                          className="mt-3"
+                          onClick={() => void handleExportMain()}
+                          disabled={exporting}
+                        >
+                          Reintentar
+                        </Button>
+                      </div>
+                    )}
+                    {copySummaryError !== null && (
+                      <p className="mt-3 text-sm text-error">
+                        {copySummaryError}
+                      </p>
+                    )}
+
+                    <div className="mt-6">
+                      <Button
+                        variant="secondary"
+                        size="lg"
+                        onClick={() =>
+                          setShowExportsHistory((value) => !value)
+                        }
+                        aria-expanded={showExportsHistory}
+                      >
+                        Exportaciones ({exportsList.length})
+                      </Button>
+                      {showExportsHistory && (
+                        <ul className="mt-3 space-y-3">
+                          {exportsList.length === 0 && (
+                            <li className="rounded-md border border-border px-4 py-3">
+                              <p className="text-sm text-text-secondary">
+                                Todavía no hay exportaciones.
+                              </p>
+                            </li>
+                          )}
+                          {exportsList.map((row) => (
+                            <li
+                              key={row.id}
+                              className="rounded-md border border-border px-4 py-3"
+                            >
+                              <p className="font-semibold">
+                                {getCrmAdapter(row.target).label} ·{' '}
+                                {exportKindLabel(row)}
+                              </p>
+                              <p className="mt-1 text-sm text-text-secondary">
+                                {noteDateFormatter.format(
+                                  new Date(row.created_at),
+                                )}{' '}
+                                · {EXPORT_STATUS_LABELS[row.status]}
+                                {row.external_id !== null &&
+                                  row.external_id !== '' &&
+                                  ` · ID ${row.external_id}`}
+                              </p>
+                              {row.error_message !== null &&
+                                row.error_message !== '' && (
+                                  <p className="mt-1 text-sm text-error">
+                                    {row.error_message}
+                                  </p>
+                                )}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
                   </>
                 )}
               </section>

@@ -31,6 +31,7 @@ import {
   groupTasksByBucket,
   type TaskBucket,
 } from '../features/tasks/buckets'
+import { listNotesToExport } from '../features/export/api'
 import { useAuth } from '../lib/auth-context'
 import { APP_PHASE_LABEL } from '../lib/app-label'
 import type { ExtractedFactRow, TaskRow } from '../lib/database.types'
@@ -51,8 +52,9 @@ function dueDateText(dueDate: string | null): string {
  *   deshacer 5 s), «Cambiar fecha» y «Editar».
  * - «Completadas recientes (7 días)» plegadas, con «Reabrir».
  * - «Notas que piden acción»: por revisar, sin transcribir,
- *   seguimiento sin preparar, borradores por aprobar y tareas
- *   propuestas sin revisar, con contador por grupo.
+ *   seguimiento sin preparar, borradores por aprobar, tareas
+ *   propuestas sin revisar y por exportar (Fase 7: notas aprobadas
+ *   cuya ficha aún no ha salido de la app), con contador por grupo.
  * - «Nueva tarea» a mano, sin nota.
  */
 export default function Pending() {
@@ -72,6 +74,7 @@ export default function Pending() {
   >([])
   const [unapprovedDrafts, setUnapprovedDrafts] = useState<UnapprovedDraft[]>([])
   const [proposedTasks, setProposedTasks] = useState<TaskRow[]>([])
+  const [toExportNotes, setToExportNotes] = useState<NoteWithClientAndProperty[]>([])
   const [loading, setLoading] = useState(supabaseConfigured)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -106,6 +109,7 @@ export default function Pending() {
       listDraftedNoteIds(),
       listUnapprovedDrafts(),
       listProposedTasks(),
+      listNotesToExport(),
     ])
       .then(
         ([
@@ -117,6 +121,7 @@ export default function Pending() {
           draftedIds,
           unapprovedRows,
           proposedRows,
+          toExportRows,
         ]) => {
           if (!mounted) return
           setPending(pendingRows)
@@ -128,6 +133,7 @@ export default function Pending() {
           )
           setUnapprovedDrafts(unapprovedRows)
           setProposedTasks(proposedRows)
+          setToExportNotes(toExportRows)
           setLoading(false)
           const noteIds = new Set<string>()
           for (const task of [...pendingRows, ...completedRows, ...proposedRows]) {
@@ -169,7 +175,8 @@ export default function Pending() {
     draftNotes.length > 0 ||
     noFollowUpNotes.length > 0 ||
     unapprovedDrafts.length > 0 ||
-    proposedTasks.length > 0
+    proposedTasks.length > 0 ||
+    toExportNotes.length > 0
 
   function updatePending(updated: TaskRow) {
     setPending((previous) =>
@@ -775,6 +782,17 @@ export default function Pending() {
                       </li>
                     )
                   })}
+                </ul>
+              </div>
+            )}
+
+            {toExportNotes.length > 0 && (
+              <div className="mt-6">
+                <h3 className="text-base font-semibold">
+                  Por exportar ({toExportNotes.length})
+                </h3>
+                <ul className="mt-3 space-y-3">
+                  {toExportNotes.map((note) => renderActionNote(note))}
                 </ul>
               </div>
             )}

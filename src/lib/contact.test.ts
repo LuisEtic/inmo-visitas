@@ -9,6 +9,7 @@ import {
   parsePriceEs,
   telHref,
   whatsappHref,
+  whatsappShareHref,
 } from './contact'
 
 describe('normalizePhone', () => {
@@ -100,12 +101,70 @@ describe('telHref / whatsappHref / emailHref', () => {
     expect(telHref('12345')).toBeNull()
     expect(whatsappHref(null)).toBeNull()
     expect(whatsappHref('12345')).toBeNull()
+    expect(whatsappHref('12345', 'Hola')).toBeNull()
+    expect(whatsappHref('', 'Hola')).toBeNull()
     expect(emailHref(null)).toBeNull()
     expect(emailHref('')).toBeNull()
   })
 
   it('mailto: con el email tal cual', () => {
     expect(emailHref('ana.garcia@gmail.com')).toBe('mailto:ana.garcia@gmail.com')
+  })
+})
+
+describe('whatsappHref con texto (Fase 7)', () => {
+  it('añade ?text= con el texto codificado', () => {
+    expect(whatsappHref('+34612345678', 'Hola Ana, ¿qué tal?')).toBe(
+      'https://wa.me/34612345678?text=Hola%20Ana%2C%20%C2%BFqu%C3%A9%20tal%3F',
+    )
+  })
+
+  it('codifica saltos de línea, €, tildes, &, ? # y emojis', () => {
+    const text = 'Hola Ana,\n¿te va bien el viernes a las 17h? Son 230.000 € & más #detalles? 😊'
+    const href = whatsappHref('612345678', text)
+    expect(href).not.toBeNull()
+    expect(href?.startsWith('https://wa.me/34612345678?text=')).toBe(true)
+    // Lo que va tras ?text= es el texto tal cual al decodificarlo.
+    const encoded = href?.slice('https://wa.me/34612345678?text='.length) ?? ''
+    expect(decodeURIComponent(encoded)).toBe(text)
+    expect(href).toContain('%0A')
+    expect(href).toContain('%E2%82%AC')
+    expect(href).toContain('%26')
+    expect(href).toContain('%3F')
+    expect(href).toContain('%23')
+  })
+
+  it('sin texto, igual que en la Fase 3', () => {
+    expect(whatsappHref('+34612345678', '')).toBe('https://wa.me/34612345678')
+    expect(whatsappHref('+34612345678', undefined)).toBe(
+      'https://wa.me/34612345678',
+    )
+  })
+
+  it('aguanta un borrador de 1500 caracteres variados', () => {
+    // 1500 caracteres mezclando letras con tildes, cifras, €, signos
+    // y emojis (el texto más largo posible: un borrador aprobado).
+    const chunk = 'Hola Ana, ¿te va el viernes a las 17h? 230.000 € & #piso? 😊\n'
+    const text = chunk.repeat(25).slice(0, 1500)
+    expect(text.length).toBe(1500)
+    const href = whatsappHref('612345678', text)
+    expect(href).not.toBeNull()
+    const encoded = href?.slice('https://wa.me/34612345678?text='.length) ?? ''
+    expect(decodeURIComponent(encoded)).toBe(text)
+    // Cabe de sobra en los límites de los navegadores móviles.
+    expect(href?.length ?? 0).toBeLessThan(8000)
+  })
+})
+
+describe('whatsappShareHref (Fase 7)', () => {
+  it('wa.me sin número, con el texto codificado', () => {
+    expect(whatsappShareHref('Visita V-18')).toBe(
+      'https://wa.me/?text=Visita%20V-18',
+    )
+    const href = whatsappShareHref('Hola,\n¿qué tal? 230.000 €')
+    expect(decodeURIComponent(href.slice('https://wa.me/?text='.length))).toBe(
+      'Hola,\n¿qué tal? 230.000 €',
+    )
   })
 })
 

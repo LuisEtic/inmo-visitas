@@ -1702,3 +1702,535 @@ página; «Generar borrador» llama a `drafts` con `audience:
   medirlo en el piloto.
 - **Siguiente:** prompt de la Fase 7 en `docs/prompts/PROMPT-FASE-7.md`
   (exportación al CRM y WhatsApp). Se lanza solo cuando Luis lo pida.
+
+## HANDOFF FASE 7: exportación al CRM y WhatsApp (Muse, 2026-11-12)
+
+**Construida, sin commit, sin tag, sin push y sin desplegar a Pages.**
+HEAD sigue en `f84db0e` (PR #12, cierre de la Fase 6). Sin tocar
+0001–0009, `transcribe`/`extract`/`drafts`, RLS existente, guards de
+`visit_notes`/`extracted_facts`/`tasks`/`drafts`, tokens de diseño,
+fuentes, ruta base ni Auth. Sin dependencias nuevas de producción.
+Sin claves reales. Nada se envía nunca automáticamente: «Abrir en
+WhatsApp» solo abre `wa.me` con el texto (el agente pulsa Enviar en
+WhatsApp) y solo con borradores aprobados; exportar al CRM solo
+cuando el agente pulsa «Exportar».
+
+**NO aplicado ni desplegado:** la migración 0010 NO está aplicada
+en el proyecto real (la aplica Argo por API o Luis en el SQL
+Editor, con `docs/deploy/supabase-fase-7.sql`); la función
+`crm-export` NO está desplegada (la despliega Luis en el panel,
+sección `crm-export` de `supabase/functions/README.md`); Pages NO
+desplegado. `ESTADO.md` no se actualiza aquí (lo hace el cierre).
+
+### Archivos creados
+
+- `supabase/migrations/0010_exportaciones.sql` (7.325 bytes) y copia
+  idéntica `docs/deploy/supabase-fase-7.sql` (`diff` verificado).
+  En `crm_exports`: `kind` (`nota|borrador`, defecto `nota`),
+  `draft_id uuid references drafts(id) on delete cascade`
+  (obligatorio si `kind = 'borrador'`, nulo si `kind = 'nota'`),
+  `audience` (`comprador|propietario`, obligatorio si
+  `kind = 'borrador'`), `external_id text`, `error_message text`
+  (check ≤ 300 caracteres, en español, sin datos personales),
+  `updated_at timestamptz`; `visit_note_id` ahora NOT NULL;
+  estados `pendiente|enviado|error|entregado` (sustituye el check
+  anterior); checks de combinaciones
+  (`crm_exports_kind_target_check`: `inmovilla|witei` → `kind =
+  'nota'`; `whatsapp` → `nota` o `borrador`; `manual` → `nota`;
+  `crm_exports_draft_check`: `draft_id`/`audience` coherentes con
+  `kind`); trigger `crm_exports_guard` (insert/update/delete,
+  `security invoker`, estilo `drafts_guard`); índice
+  `crm_exports_visit_note_created_idx (visit_note_id, created_at
+  desc)`.
+- `src/features/export/summary.ts` + `summary.test.ts` (8 tests):
+  `buildVisitSummary(input)` → `{ text, json }`,
+  `SUMMARY_MAX_CHARS = 3000`, `json.schema = 'inmo-visitas.v1'`.
+- `src/features/export/api.ts` (`loadExportContext`,
+  `listNoteExports`, `recordDelivery`, `exportToCrm` — las tres
+  primeras viven en `deliveries.ts` y se reexportan) y
+  `src/features/export/deliveries.ts`.
+- `supabase/functions/crm-export/index.ts` + `mappers.ts` +
+  `mappers.test.ts` (11 tests): esquemas Zod
+  (`inmovillaPayloadSchema`, `witeiPayloadSchema`),
+  `mapToInmovilla`, `mapToWitei`, `signBody` (HMAC-SHA256 por Web
+  Crypto; vector fijo verificado: secreto `secreto-de-prueba` +
+  cuerpo `{"schema":"inmo-visitas.v1"}` →
+  `71bf464257c481bf643afd8e53793ac00c6fbd98ba61e46b565e7d60dc0c4461`).
+- `src/integrations/crm/crm-function.ts` (compartido por Inmovilla
+  y Witei: `functions.invoke('crm-export', ...)`).
+
+### Archivos modificados
+
+- `src/lib/database.types.ts` (`CrmExportStatus`,
+  `CrmExportKind`, `CrmExportTarget`, `CrmExportRow/Insert/Update`,
+  `crm_exports` en `Database` con relaciones a `visit_notes` y
+  `drafts`).
+- `src/lib/db-errors.ts` + tests: `borrador_no_aprobado` →
+  «Aprueba el borrador antes de enviarlo.»,
+  `exportacion_no_valida` → «Esta exportación no es válida.»,
+  `exportacion_cerrada` → «Esta exportación ya está cerrada; si
+  quieres, vuelve a exportar.»; `translateDbError` acepta el
+  contexto `{ exports: true }` para `nota_no_aprobada` → «Aprueba
+  la nota antes de exportarla.» (sin contexto sigue el texto de la
+  Fase 6).
+- `src/lib/contact.ts` + tests: `whatsappHref(phone, text?)`
+  (añade `?text=` + `encodeURIComponent`; sin texto, igual que en
+  la Fase 3; teléfono no válido o vacío → `null`) y
+  `whatsappShareHref(text)` (`https://wa.me/?text=…`).
+- `src/integrations/crm/types.ts`: reescrito (`VisitNoteExportInput
+  = { visitNoteId, summary: VisitSummary }`, `CrmExportResult = {
+  ok, status?, exportId?, externalId?, simulated?, href?, error?
+  }`; el comentario ya no dice que son stubs; se eliminó el
+  `VisitNoteExportPayload` antiguo, que nada usaba fuera de la
+  carpeta).
+- `src/integrations/crm/inmovilla.ts` / `witei.ts` (adaptadores
+  finos sobre `crm-function.ts`); `manual.ts` (copia
+  `summary.text`; si falla el portapapeles → `ok: false` y NO se
+  registra fila; si copia, inserta `manual`/`nota`/`entregado`);
+  `whatsapp.ts` (registra `whatsapp`/`nota`/`entregado` y devuelve
+  `whatsappShareHref(summary.text)`); `index.ts` exporta
+  `VisitNoteExportInput`.
+- `src/pages/NoteDetail.tsx`: «Abrir en WhatsApp» en cada tarjeta
+  de borrador APROBADO (junto a «Copiar», `<a target="_blank"
+  rel="noopener">`, `whatsappHref(teléfono, content)`; comprador →
+  `clients.phone`, propietario → `properties.owner_phone`; al
+  pulsar registra la fila `whatsapp`/`borrador`/`entregado` sin
+  bloquear la apertura, aviso discreto si el registro falla; sin
+  teléfono válido: botón desactivado «Falta el teléfono» + enlace
+  a la ficha para añadirlo; debajo «Abierto en WhatsApp el …» con
+  la última fila + nota fija «Revisa y pulsa Enviar en WhatsApp:
+  la app no lo envía por ti.»; en borrador sin aprobar NO hay botón
+  de WhatsApp). Sección «Exportar» solo con nota `approved`,
+  debajo de «Seguimiento»: vista previa plegable de la ficha,
+  botón principal según `clientConfig.crmTarget`, «Copiar ficha»
+  como secundaria (registra `manual`), historial plegable
+  «Exportaciones (N)», métricas del piloto «Exportada: sí/no ·
+  WhatsApp abierto: comprador sí/no, propietario sí/no».
+- `src/pages/Notes.tsx`: en notas aprobadas, «Exportada» o «Sin
+  exportar» junto a «Seguimiento: …».
+- `src/pages/Pending.tsx`: grupo «Por exportar (N)» (notas
+  `approved` sin ninguna fila `enviado` ni `entregado` de `kind =
+  'nota'`), último en «Notas que piden acción».
+- `src/pages/Home.tsx`: «Fase 7 — Exportación al CRM y WhatsApp»;
+  `src/lib/app-label.ts`: `'inmo-visitas · Fase 7'`.
+- `supabase/functions/README.md`: sección `crm-export`
+  (despliegue Via Editor con los dos archivos, modo simulado,
+  cómo probar el modo webhook contra un receptor propio).
+
+### Verificaciones (2026-11-12, todo en verde)
+
+- `npm test`: **185/185** (14 archivos; 160 previos + 25 nuevos:
+  `summary.test.ts` 8, `mappers.test.ts` 11, `contact.test.ts` 5,
+  `db-errors.test.ts` 1).
+- `npx tsc --noEmit` sin errores y `npm run build` sin errores en
+  base `/` y con `VITE_BASE_PATH=/inmo-visitas/` (MD5 del
+  `index.html` en base `/inmo-visitas/`:
+  `f2c643807b4aa2ade1cec58310c540da`); mayor trozo JS:
+  `vendor-react` 255.497 bytes (< 500 kB).
+- `npm run lint`: 0 errores, 2 avisos (los de shadcn aceptados).
+- **Criterio 4 VERIFICADO en local: 28/28 PASS.** PostgreSQL 16
+  instalado en la VM (clúster temporal en `/tmp/pg-fase7/`, puerto
+  54399; scripts en `/tmp/pg-fase7/test-0010-setup.sql` y
+  `test-0010-cases.sql`, simulando los esquemas `auth` y
+  `storage`): migraciones 0001–0010 aplicadas en orden sin errores
+  y **0010 reaplicada limpia (idempotente)**. Los 28 casos: nota no
+  aprobada → `nota_no_aprobada`; borrador en borrador / de otra
+  nota / con otro audience → `borrador_no_aprobado`; `manual` y
+  `whatsapp` con `pendiente` → `exportacion_no_valida`;
+  `inmovilla`/`manual` con `kind = 'borrador'` y `nota` con
+  `draft_id` → CHECK (23514); `error_message` > 300 → CHECK;
+  `whatsapp`/`borrador` válido → `entregado` con `exported_at`;
+  `pendiente → enviado` (pone `exported_at`) y `pendiente → error`
+  OK; cambiar `enviado`/`error` o `visit_note_id`/`target` de una
+  pendiente → `exportacion_cerrada`; borrar una fila con la nota
+  viva → `exportacion_cerrada`; **borrar entera la nota 3 con sus
+  exportaciones funciona (cascada RGPD)** y sus borradores también
+  desaparecen. Detalle: con `inmovilla` + `borrador` + `entregado`
+  el guard dispara antes que el CHECK (`exportacion_no_valida`);
+  con `pendiente` es el CHECK el que falla — en ambos casos el
+  inserto falla, que es lo que pide el criterio. Las pruebas del
+  guard corren como superusuario: la parte RLS del criterio 7 (B
+  no ve ni inserta exportaciones de A) queda para el proyecto real
+  (las políticas son las de la 0004, sin tocar).
+- `deno check` de `crm-export`: **sin Deno en la VM** (`which
+  deno` → no encontrado); lo hace Claude en la revisión, como en
+  las Fases 5 y 6.
+- Incidencias durante la construcción (arregladas, no pendientes):
+  un `muse.edit` quitó `setApprovingDraft(true)` de
+  `handleApproveDraft` en `NoteDetail.tsx`; restaurado y verificado
+  por `git diff`. `tsc --noEmit` pasaba pero `npm run build`
+  (`tsc -b`) falló por `FactCategory` importado de
+  `../extraction/labels` (no se reexporta ahí); se importa de
+  `../../lib/database.types` en `summary.ts`. Lección repetida: el
+  build es más estricto que `tsc --noEmit`; hay que correr siempre
+  el build.
+
+### LO QUE SALE DE LA APP (copiado del código, con la nota de ejemplo)
+
+Datos vivos leídos del proyecto real el 2026-11-12 ~22:40 (nota
+`e0782f7c-8409-4e23-a2b0-5972521fed0a`, aprobada el 2026-11-12
+13:32; cliente Ana García, +34612345678, ana.garcia@gmail.com, no
+provisional; inmueble V-18, Calle de Alcalá 120, Madrid;
+propietario Carlos Ruiz, +34 611 100 200; agente Agente A Prueba;
+6 datos no descartados — objeción ruido, cita «Confirma viernes a
+las 17h» (editada por Luis), presupuesto 230.000 euros, acompañante
+«Su pareja», petición gastos/IBI, observación «Pide informe del
+administrador de cuotas al dia de pago» (añadida por Luis) — y 1
+tarea `pendiente`: «Enviar información sobre los gastos de
+comunidad e IBI de V-18 (sin fecha)»; las 2 tareas `propuesta` NO
+van a la ficha). La ficha y los dos payloads se generaron con el
+código real (`buildVisitSummary` + `mappers.ts`) con esos datos.
+
+**Lo que NO sale nunca:** transcripción, texto de la nota, audio
+(ni su ruta), citas literales (`evidence_quote`), datos
+descartados ni borradores. Al propietario solo le llega su
+borrador aprobado por WhatsApp, nunca la ficha.
+
+#### WhatsApp al comprador (Ana García, +34612345678)
+
+⚠️ **El borrador del comprador sigue en «borrador»** (es el v4,
+regenerado tras la revisión PR #10): el botón «Abrir en WhatsApp»
+**no aparece** hasta que Luis lo apruebe (el propio criterio 1
+del prompt dice «aprueba antes el borrador del comprador»). Cuando
+se apruebe, el enlace será
+`https://wa.me/34612345678?text=<el texto, con
+encodeURIComponent>` y el texto será este (leído de la BD):
+
+> Hola Ana, ha sido un placer enseñarte V-18 (Calle de Alcalá
+> 120) junto a tu pareja. Respecto al ruido de la calle Alcalá por
+> la noche, ten en cuenta que el piso cuenta con buenos
+> cerramientos para mitigar el sonido exterior. Para avanzar, sobre
+> la próxima visita pendiente, ¿me confirmas si te va bien el
+> viernes a las 17h o prefieres matizar la hora? Además, te
+> adjunto la información sobre los gastos de comunidad, el IBI y
+> el informe del administrador sobre las cuotas al día de pago que
+> solicitaste. Un abrazo, Agente A Prueba
+
+Observación no bloqueante (B-5 de la revisión de la Fase 6, sigue
+vigente): «buenos cerramientos para mitigar el sonido exterior»
+no está en los datos y ninguna regla lo comprueba.
+
+#### WhatsApp al propietario (Carlos Ruiz, +34 611 100 200)
+
+Borrador **aprobado** por Luis en la prueba del móvil de la Fase 6:
+el botón «Abrir en WhatsApp» sí aparece. Enlace:
+`https://wa.me/34611100200?text=<el texto, con
+encodeURIComponent>`. Texto (leído de la BD):
+
+> Hola Carlos,
+>
+> Le escribo tras la visita a V-18 (Calle de Alcalá 120)
+> realizada con la persona interesada y su pareja. Durante el
+> recorrido, mostraron interés y han solicitado los gastos de
+> comunidad, el IBI y el informe del administrador sobre las cuotas
+> al día de pago. Además, comentaron la percepción de ruido de la
+> calle Alcalá por la noche.
+>
+> Respecto a los siguientes pasos, me indicó que le venía bien
+> confirmar viernes a las 17h, por lo que quedo a la espera de su
+> confirmación para agendarlo.
+>
+> Agente A Prueba
+
+Sin presupuesto, sin nombre de la clienta, cita sin confirmar.
+
+#### Ficha — texto (`buildVisitSummary`, 11 nov 2026, 17:22 hora de Madrid)
+
+```text
+Visita V-18 · Calle de Alcalá 120, Madrid
+11 nov 2026, 17:22 · Agente: Agente A Prueba
+Cliente: Ana García · 612 34 56 78 · ana.garcia@gmail.com
+Hechos declarados:
+- Acompanante visita: Su pareja
+- Peticion informacion: Gastos de comunidad e IBI
+Observaciones:
+- Peticion informacion: Pide informe del administrador de cuotas al dia de pago
+Objeciones:
+- Ruido calle: Ruido de la calle Alcalá por la noche
+Presupuesto declarado:
+- Presupuesto declarado (declarado): 230.000 euros
+Citas pendientes (sin confirmar):
+- Proxima visita: Confirma viernes a las 17h
+Tareas:
+- Enviar información sobre los gastos de comunidad e IBI de V-18 (sin fecha)
+```
+
+#### Ficha — JSON (`schema: 'inmo-visitas.v1'`)
+
+```json
+{
+  "schema": "inmo-visitas.v1",
+  "visit_note_id": "e0782f7c-8409-4e23-a2b0-5972521fed0a",
+  "reference": "V-18",
+  "address": "Calle de Alcalá 120",
+  "city": "Madrid",
+  "visited_at": "2026-11-11T16:22:19.062248Z",
+  "approved_at": "2026-11-12T13:32:22.100323Z",
+  "agent": "Agente A Prueba",
+  "client": {
+    "name": "Ana García",
+    "phone": "+34612345678",
+    "email": "ana.garcia@gmail.com",
+    "provisional": false
+  },
+  "groups": [
+    {
+      "category": "hecho_declarado",
+      "title": "Hechos declarados",
+      "facts": [
+        { "category": "hecho_declarado", "field": "acompanante_visita", "label": "Acompanante visita", "value": "Su pareja" },
+        { "category": "hecho_declarado", "field": "peticion_informacion", "label": "Peticion informacion", "value": "Gastos de comunidad e IBI" }
+      ]
+    },
+    {
+      "category": "observacion",
+      "title": "Observaciones",
+      "facts": [
+        { "category": "observacion", "field": "peticion_informacion", "label": "Peticion informacion", "value": "Pide informe del administrador de cuotas al dia de pago" }
+      ]
+    },
+    {
+      "category": "objecion",
+      "title": "Objeciones",
+      "facts": [
+        { "category": "objecion", "field": "ruido_calle", "label": "Ruido calle", "value": "Ruido de la calle Alcalá por la noche" }
+      ]
+    },
+    {
+      "category": "presupuesto",
+      "title": "Presupuesto declarado",
+      "facts": [
+        { "category": "presupuesto", "field": "presupuesto_declarado", "label": "Presupuesto declarado", "value": "230.000 euros" }
+      ]
+    },
+    {
+      "category": "cita_pendiente",
+      "title": "Citas pendientes (sin confirmar)",
+      "facts": [
+        { "category": "cita_pendiente", "field": "proxima_visita", "label": "Proxima visita", "value": "Confirma viernes a las 17h" }
+      ]
+    }
+  ],
+  "tasks": [
+    { "description": "Enviar información sobre los gastos de comunidad e IBI de V-18", "due_date": null }
+  ]
+}
+```
+
+#### Payload de Inmovilla (`mapToInmovilla`, formato propio «inmo-visitas v1», NO la API real de Inmovilla)
+
+```json
+{
+  "schema": "inmo-visitas.v1",
+  "referencia": "V-18",
+  "cliente": { "nombre": "Ana García", "telefono": "+34612345678", "email": "ana.garcia@gmail.com" },
+  "visita": { "fecha": "2026-11-11T16:22:19.062248Z", "agente": "Agente A Prueba" },
+  "comentarios": "Visita V-18 · Calle de Alcalá 120, Madrid\n11 nov 2026, 17:22 · Agente: Agente A Prueba\nCliente: Ana García · 612 34 56 78 · ana.garcia@gmail.com\nHechos declarados:\n- Acompanante visita: Su pareja\n- Peticion informacion: Gastos de comunidad e IBI\nObservaciones:\n- Peticion informacion: Pide informe del administrador de cuotas al dia de pago\nObjeciones:\n- Ruido calle: Ruido de la calle Alcalá por la noche\nPresupuesto declarado:\n- Presupuesto declarado (declarado): 230.000 euros\nCitas pendientes (sin confirmar):\n- Proxima visita: Confirma viernes a las 17h\nTareas:\n- Enviar información sobre los gastos de comunidad e IBI de V-18 (sin fecha)",
+  "datos": [
+    { "category": "hecho_declarado", "field": "acompanante_visita", "label": "Acompanante visita", "value": "Su pareja" },
+    { "category": "hecho_declarado", "field": "peticion_informacion", "label": "Peticion informacion", "value": "Gastos de comunidad e IBI" },
+    { "category": "observacion", "field": "peticion_informacion", "label": "Peticion informacion", "value": "Pide informe del administrador de cuotas al dia de pago" },
+    { "category": "objecion", "field": "ruido_calle", "label": "Ruido calle", "value": "Ruido de la calle Alcalá por la noche" },
+    { "category": "presupuesto", "field": "presupuesto_declarado", "label": "Presupuesto declarado (declarado)", "value": "230.000 euros" },
+    { "category": "cita_pendiente", "field": "proxima_visita", "label": "Proxima visita", "value": "Confirma viernes a las 17h" }
+  ],
+  "tareas": [
+    { "description": "Enviar información sobre los gastos de comunidad e IBI de V-18", "due_date": null }
+  ]
+}
+```
+
+#### Payload de Witei (`mapToWitei`, formato propio «inmo-visitas v1», NO la API real de Witei)
+
+```json
+{
+  "schema": "inmo-visitas.v1",
+  "property_reference": "V-18",
+  "contact": { "name": "Ana García", "phone": "+34612345678", "email": "ana.garcia@gmail.com" },
+  "visit": { "date": "2026-11-11T16:22:19.062248Z", "agent": "Agente A Prueba" },
+  "notes": "Visita V-18 · Calle de Alcalá 120, Madrid\n11 nov 2026, 17:22 · Agente: Agente A Prueba\nCliente: Ana García · 612 34 56 78 · ana.garcia@gmail.com\nHechos declarados:\n- Acompanante visita: Su pareja\n- Peticion informacion: Gastos de comunidad e IBI\nObservaciones:\n- Peticion informacion: Pide informe del administrador de cuotas al dia de pago\nObjeciones:\n- Ruido calle: Ruido de la calle Alcalá por la noche\nPresupuesto declarado:\n- Presupuesto declarado (declarado): 230.000 euros\nCitas pendientes (sin confirmar):\n- Proxima visita: Confirma viernes a las 17h\nTareas:\n- Enviar información sobre los gastos de comunidad e IBI de V-18 (sin fecha)",
+  "facts": [
+    { "category": "hecho_declarado", "field": "acompanante_visita", "label": "Acompanante visita", "value": "Su pareja" },
+    { "category": "hecho_declarado", "field": "peticion_informacion", "label": "Peticion informacion", "value": "Gastos de comunidad e IBI" },
+    { "category": "observacion", "field": "peticion_informacion", "label": "Peticion informacion", "value": "Pide informe del administrador de cuotas al dia de pago" },
+    { "category": "objecion", "field": "ruido_calle", "label": "Ruido calle", "value": "Ruido de la calle Alcalá por la noche" },
+    { "category": "presupuesto", "field": "presupuesto_declarado", "label": "Presupuesto declarado (declarado)", "value": "230.000 euros" },
+    { "category": "cita_pendiente", "field": "proxima_visita", "label": "Proxima visita", "value": "Confirma viernes a las 17h" }
+  ],
+  "tasks": [
+    { "description": "Enviar información sobre los gastos de comunidad e IBI de V-18", "due_date": null }
+  ]
+}
+```
+
+(En los dos payloads, `datos`/`facts` van en el mismo orden de
+categorías que los grupos de la ficha (hecho, observación,
+objeción, presupuesto, cita); la única diferencia es que la ficha
+JSON anida los datos dentro de cada grupo y los payloads los
+aplanan en una lista. El contenido es el mismo.)
+
+### Supuestos / decisiones de interpretación (no están en el prompt)
+
+1. `nota_no_aprobada`: el texto de la Fase 6 («Aprueba la nota
+   antes de preparar el seguimiento») no encaja en exportaciones;
+   `translateDbError` toma un contexto nuevo `{ exports: true }`
+   que devuelve «Aprueba la nota antes de exportarla»; sin contexto
+   el texto y el test de la Fase 6 no cambian.
+2. La línea de cliente de la ficha lleva el teléfono REAL
+   formateado (`612 34 56 78`) y el email real: el `+34 6xx xxx xxx`
+   / `<email>` del prompt se leen como marcadores de un documento
+   de especificación (la ficha se copia al CRM o a WhatsApp; con
+   los datos enmascarados no serviría).
+3. El orden de los grupos de la ficha es el de la enumeración del
+   prompt (hecho_declarado, observacion, objecion, presupuesto,
+   cita_pendiente, desconocido), NO el `CATEGORY_ORDER` de
+   `labels.ts` (orden de «Revisar»); de `labels.ts` solo vienen los
+   NOMBRES de los grupos.
+4. El texto de la ficha no tiene líneas en blanco (igual que el
+   bloque de ejemplo del prompt); el marcador «…» del recorte va en
+   su propia línea cuando se recortan tareas.
+5. `fieldLabel` es mecánico (sin tildes ni artículos): p. ej.
+   `ruido_calle` → «Ruido calle», `informacion_solicitada` →
+   «Informacion solicitada» — las mismas etiquetas que en
+   «Revisar», como pide el prompt.
+6. En los payloads del CRM, la etiqueta del dato de presupuesto
+   lleva ` (declarado)` («Presupuesto declarado (declarado)»); en
+   el texto de la ficha lo lleva la línea, por categoría. La
+   redundancia viene del nombre del campo (`presupuesto_declarado`)
+   y no se ha «arreglado» en la Fase 7: cambiar la etiqueta sería
+   tocar «Revisar». Si molesta, es un pulido para la Fase 9.
+7. `recordDelivery` / `listNoteExports` viven en
+   `src/features/export/deliveries.ts` (reexportadas desde
+   `api.ts`) para evitar un import circular (`api.ts` importa
+   `src/integrations/crm/` y los adaptadores `manual`/`whatsapp`
+   importan la función de registro).
+8. Adaptador `manual`: si el portapapeles falla → `ok: false` y
+   NO se registra fila (la ficha no llegó al agente; la UI muestra
+   el texto para copiarlo a mano). Adaptador `whatsapp`: registra
+   primero y luego devuelve el `href`; `CrmExportResult` ganó el
+   campo opcional `href` (no estaba en la forma del prompt) para
+   que la UI pueda abrirlo.
+9. La secundaria «Copiar ficha» NO se muestra cuando el destino
+   principal es `manual` (duplicaría el botón principal).
+10. `mappers.ts` duplica lo mínimo de `buildVisitSummary` (la
+    función no puede importar de `src/`); un test comprueba que su
+    texto + JSON son idénticos a los del frontend con la misma
+    entrada, así que una deriva se detecta.
+11. `exportToCrm(noteId, target)` vuelve a cargar el contexto de
+    exportación aunque la UI ya tenga la ficha (firma exacta del
+    prompt; lecturas en paralelo, coste aceptado).
+12. El guard dispara antes que los CHECK en algunos insertos
+    (p. ej. `inmovilla` + `borrador` + `entregado` →
+    `exportacion_no_valida` en vez de 23514): el inserto falla
+    igual; el orden entre guard y CHECK no cambia el
+    comportamiento.
+
+### Pendientes / cómo probarlo
+
+- **Criterios 5, 6 y 7 (función en simulado/webhook y negativos
+  RLS): sin probar** — la función no está desplegada y la 0010 no
+  está aplicada en el proyecto real. Pasos: (1) aplicar
+  `docs/deploy/supabase-fase-7.sql` en el SQL Editor (o Argo por
+  API); (2) desplegar `crm-export` por Luis en el panel (dos
+  archivos, sección en `supabase/functions/README.md`); (3) criterio
+  5: curl con el JWT del agente A a una nota aprobada → 200,
+  `enviado`, `external_id: 'SIM-…'`, `simulated: true`; segunda
+  llamada → misma fila con `already_exported: true`; nota no
+  aprobada → 409 «Aprueba la nota antes de exportarla.»;
+  (4) criterio 6: poner `CRM_WEBHOOK_URL` a un receptor propio
+  que devuelva 500 (o apagarlo) → fila `error`, 502 en español,
+  sin datos en el mensaje, y «Reintentar» crea una fila nueva;
+  (5) criterio 7: `crm-export` con el JWT de B sobre una nota de A
+  → 404; B no ve ni inserta `crm_exports` de A (ni con `kind =
+  'borrador'` sobre un borrador de A); sin JWT → 401.
+- **Criterio 1 (navegador + móvil de Luis): sin probar.** Pasos
+  con la nota de ejemplo (Ana + V-18, única aprobada): (a) aprobar
+  antes el borrador del comprador (sigue en «borrador»); (b) en
+  `/notas/:id`, «Abrir en WhatsApp» en el borrador del comprador
+  (Ana, +34612345678) y en el del propietario (Carlos, +34 611 100
+  200): se abre WhatsApp con el texto; **revisar y pulsar Enviar
+  en WhatsApp** — la app no envía nada por sí sola; (c) «Vista
+  previa de la ficha» y «Copiar ficha»; (d) «Exportar a Inmovilla»
+  en modo simulado (con `VITE_CLIENT_CRM_TARGET=inmovilla` en una
+  build local, o el destino que toque): etiqueta «Simulado» y
+  estado «Exportada … (ID SIM-…)»; (e) comprobar que /pendientes
+  pierde «Por exportar» y /notas muestra «Exportada».
+- **Navegador a 360 px, sin desbordamiento ni errores de consola,
+  en local y en Pages: sin probar** (esta sesión no tiene navegador
+  en vivo). Pendiente para Luis con los pasos de arriba; tras cada
+  despliegue en Pages, cerrar la pestaña del todo y reabrir (caché
+  de la PWA).
+- **`deno check` de `crm-export`:** sin Deno en la VM; lo hace
+  Claude en la revisión.
+- **Después, revisión de Claude** (pasarle este HANDOFF) y cierre
+  de la Fase 7. Aplazados a la Fase 9 (sin tocar): reintento de
+  subida tras fallo parcial, URL firmada que se repide tras
+  transcribir, B-1 a B-4 de la revisión de la Fase 6 (y B-5: el
+  borrador puede afirmar cosas del inmueble que no están en los
+  datos — «buenos cerramientos…» —, ninguna regla lo comprueba).
+
+### Verificación por Argo en el proyecto real (2026-11-12)
+
+- **Build revisado de forma independiente: `npm test` 185/185,
+  `tsc --noEmit` OK, build OK en base `/` y `/inmo-visitas/`,
+  lint 0 errores + 2 avisos (shadcn).** Coincide con el informe
+  del constructor. Migración 0010 y copia de despliegue idénticas
+  (`diff` verificado).
+- **Migración 0010 APLICADA por Argo por la Management API**
+  (`docs/deploy/supabase-fase-7.sql`, 7.291 bytes). Verificado en
+  la base: columnas nuevas (`kind`, `draft_id`, `audience`,
+  `external_id`, `error_message`, `updated_at`), `visit_note_id`
+  NOT NULL, checks (`kind`, `draft`, `kind_target`, `status` con
+  los 4 estados, `error_message`), trigger `crm_exports_guard` e
+  índice `(visit_note_id, created_at desc)`. La tabla estaba vacía
+  (0 filas).
+- **Criterio 4 VERIFICADO por API en el proyecto real: 14/14
+  efectivo.** Con nota de sacrificio (cliente provisional +
+  V-99/V-98, texto, `extract`, datos aceptados, aprobada) y la
+  nota de ejemplo: nota no aprobada → `nota_no_aprobada`;
+  borrador sin aprobar / con otro audience / de otra nota →
+  `borrador_no_aprobado`; `manual` con `pendiente` →
+  `exportacion_no_valida`; `inmovilla` con `kind = 'borrador'` →
+  CHECK; `whatsapp`/`nota` nace `entregado` con `exported_at`;
+  `inmovilla`/`nota` nace `pendiente`; `pendiente → enviado` (pone
+  `exported_at` y acepta `external_id`); `pendiente → error`
+  (guarda `error_message`); cambiar o borrar una fila cerrada →
+  `exportacion_cerrada`; **borrar entera la nota con exportaciones
+  funciona (cascada RGPD, 0 filas restantes)**. Notas de
+  sacrificio, clientes e inmuebles de prueba eliminados; la nota
+  de ejemplo queda intacta (sin filas de exportación) para la
+  prueba de Luis en el navegador.
+  - **Incidencia del primer intento (no es un defecto del
+    producto):** el caso 11 (`pendiente → enviado`) falló al
+    principio con `exportacion_cerrada`. Causa: la API de
+    Supabase está hoy muy inestable (varios
+    `RemoteDisconnected`/`IncompleteRead` en la misma sesión) y
+    el script reintentó el PATCH a ciegas; el primer intento ya
+    había aplicado el cambio y el reintento chocó con el guard de
+    fila cerrada. Repetido con un solo intento y comprobación del
+    estado por GET: **200, `enviado` + `exported_at`**. Lección:
+    no reintentar a ciegas un PATCH que el guard hace no
+    idempotente; comprobar el estado con GET.
+- **Pendiente:** desplegar `crm-export` (Luis, Via Editor con
+  `index.ts` + `mappers.ts`, verificación de JWT activada) y
+  aprobar el borrador del comprador (sigue en «borrador»: su
+  botón de WhatsApp no aparece hasta aprobarlo). Después: Argo
+  verifica los criterios 5, 6 y 7 por API (simulado, webhook con
+  receptor que falle, negativos con el JWT de B — hace falta su
+  contraseña — y sin JWT), el navegador a 360 px, commit + tag
+  `v0.7-fase-7` + push + Pages.
+
+### Borrador del comprador aprobado (Argo, 2026-11-12 ~22:58)
+
+- Luis pidió que Argo lo hiciera directamente: aprobado por API
+  como agente A (PATCH `drafts` → `aprobado`, `approved_at`
+  2026-11-12T21:58:29Z). El PATCH devolvió 400
+  `borrador_aprobado` por el mismo artefacto de reintento de la
+  API inestable (el primer intento ya lo había aprobado); el GET
+  posterior confirma los dos borradores en `aprobado`. Ya aparece
+  el botón «Abrir en WhatsApp» del comprador.
+- **Pendiente para desplegar `crm-export`:** el código de la Fase 7
+  aún NO está en `main` (sin commit), así que Luis no puede copiar
+  los archivos desde GitHub. Orden: token → commit + tag + push
+  de Argo → despliegue Via Editor desde `main` (pasos en
+  `supabase/functions/README.md`).

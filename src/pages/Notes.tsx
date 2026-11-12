@@ -11,6 +11,7 @@ import {
   type NoteWithClientAndProperty,
 } from '../features/notes/api'
 import { listDraftedNoteIds } from '../features/tasks/api'
+import { listExportedNoteIds } from '../features/export/deliveries'
 import { useAuth } from '../lib/auth-context'
 import { APP_PHASE_LABEL } from '../lib/app-label'
 import type { VisitNoteStatus } from '../lib/database.types'
@@ -33,14 +34,16 @@ function statusLabel(status: VisitNoteStatus | 'todas'): string {
 /**
  * /notas (privada, Fase 6): todas las notas del agente, las más
  * recientes primero, con fecha, cliente, referencia, tipo (texto o
- * voz), estado y, si está aprobada, si el seguimiento está preparado.
- * Filtro por estado, búsqueda por cliente o referencia (sin tildes) y
- * paginación de 25 en 25 («Cargar más»).
+ * voz), estado y, si está aprobada, si el seguimiento está preparado
+ * y si la ficha ya se exportó (Fase 7). Filtro por estado, búsqueda
+ * por cliente o referencia (sin tildes) y paginación de 25 en 25
+ * («Cargar más»).
  */
 export default function Notes() {
   const { supabaseConfigured } = useAuth()
   const [notes, setNotes] = useState<NoteWithClientAndProperty[]>([])
   const [draftedIds, setDraftedIds] = useState<Set<string>>(new Set())
+  const [exportedIds, setExportedIds] = useState<Set<string>>(new Set())
   const [status, setStatus] = useState<VisitNoteStatus | 'todas'>('todas')
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
@@ -70,13 +73,15 @@ export default function Notes() {
     Promise.all([
       listNotes({ status, query: debouncedQuery, offset: 0 }),
       listDraftedNoteIds(),
+      listExportedNoteIds(),
     ])
-      .then(([result, drafted]) => {
+      .then(([result, drafted, exported]) => {
         if (!mounted) return
         setNotes(result.notes)
         setHasMore(result.hasMore)
         setTotal(result.total)
         setDraftedIds(drafted)
+        setExportedIds(exported)
         setLoading(false)
       })
       .catch((error: unknown) => {
@@ -206,7 +211,8 @@ export default function Notes() {
                 {note.status === 'approved' && (
                   <span className="mt-1 block text-sm text-text-secondary">
                     Seguimiento:{' '}
-                    {draftedIds.has(note.id) ? 'preparado' : 'sin preparar'}
+                    {draftedIds.has(note.id) ? 'preparado' : 'sin preparar'} ·{' '}
+                    {exportedIds.has(note.id) ? 'Exportada' : 'Sin exportar'}
                   </span>
                 )}
               </Link>

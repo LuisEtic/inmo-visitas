@@ -9,7 +9,12 @@ import type { PostgrestError } from '@supabase/supabase-js'
  */
 export function translateDbError(
   error: PostgrestError,
-  context?: { reference?: string; drafts?: boolean; task?: boolean },
+  context?: {
+    reference?: string
+    drafts?: boolean
+    task?: boolean
+    exports?: boolean
+  },
 ): string {
   if (error.code === '23505') {
     if (context?.reference !== undefined) {
@@ -50,14 +55,29 @@ export function translateDbError(
       return 'La nota necesita al menos un dato no descartado para aprobarla'
     }
     // Migración 0009 (Fase 6): seguimiento de una nota aprobada.
+    // El mismo error lo lanza el guard de exportaciones (0010): el
+    // texto cambia según el contexto (en la exportación no se prepara
+    // ningún seguimiento).
     if (error.message.includes('nota_no_aprobada')) {
-      return 'Aprueba la nota antes de preparar el seguimiento'
+      return context?.exports === true
+        ? 'Aprueba la nota antes de exportarla'
+        : 'Aprueba la nota antes de preparar el seguimiento'
     }
     if (error.message.includes('borrador_aprobado')) {
       return 'El borrador está aprobado y ya no se puede cambiar'
     }
     if (error.message.includes('fuente_no_valida')) {
       return 'El dato de origen no pertenece a esta nota'
+    }
+    // Migración 0010 (Fase 7): registro de exportaciones.
+    if (error.message.includes('borrador_no_aprobado')) {
+      return 'Aprueba el borrador antes de enviarlo.'
+    }
+    if (error.message.includes('exportacion_no_valida')) {
+      return 'Esta exportación no es válida.'
+    }
+    if (error.message.includes('exportacion_cerrada')) {
+      return 'Esta exportación ya está cerrada; si quieres, vuelve a exportar.'
     }
   }
   return 'Ha ocurrido un error. Inténtalo de nuevo.'

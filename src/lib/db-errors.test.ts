@@ -46,6 +46,28 @@ describe('translateDbError', () => {
     ).toBe('La tarea no puede pasar a ese estado')
   })
 
+  it('traduce los errores de la migración 0010 (Fase 7)', () => {
+    expect(translateDbError(pgError('P0001', 'borrador_no_aprobado'))).toBe(
+      'Aprueba el borrador antes de enviarlo.',
+    )
+    expect(translateDbError(pgError('P0001', 'exportacion_no_valida'))).toBe(
+      'Esta exportación no es válida.',
+    )
+    expect(translateDbError(pgError('P0001', 'exportacion_cerrada'))).toBe(
+      'Esta exportación ya está cerrada; si quieres, vuelve a exportar.',
+    )
+    // El mismo error de nota no aprobada, en una exportación, habla
+    // de exportar (en el seguimiento sigue el texto de la Fase 6).
+    expect(
+      translateDbError(pgError('P0001', 'nota_no_aprobada'), {
+        exports: true,
+      }),
+    ).toBe('Aprueba la nota antes de exportarla')
+    expect(translateDbError(pgError('P0001', 'nota_no_aprobada'))).toBe(
+      'Aprueba la nota antes de preparar el seguimiento',
+    )
+  })
+
   it('traduce el duplicado de borrador por destinatario (23505)', () => {
     expect(
       translateDbError(
