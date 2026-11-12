@@ -246,6 +246,55 @@ export function fillPlaceholders(
     .replace(/ {2,}/g, ' ')
 }
 
+/** Escapa un nombre para usarlo en una expresión regular. */
+export function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/** ¿El texto menciona este nombre como palabra completa? */
+export function containsName(text: string, name: string): boolean {
+  if (name.trim() === '') {
+    return false
+  }
+  return new RegExp(`\\b${escapeRegExp(foldAccents(name))}\\b`).test(
+    foldAccents(text),
+  )
+}
+
+export type RequiredNamesCheck = { ok: true } | { ok: false; reason: string }
+
+/**
+ * El borrador final debe dirigirse a su destinatario por su nombre de
+ * pila y firmar con el nombre completo del agente. Si el modelo
+ * sustituye los marcadores por nombres inventados (p. ej. dirige el
+ * borrador del comprador a «Carlos» y lo firma «Ana»), el texto no
+ * contiene los nombres reales y se rechaza, aunque no haya marcadores
+ * desconocidos que rechazar.
+ */
+export function requiredNames(
+  text: string,
+  audience: DraftAudience,
+  values: PlaceholderValues,
+): RequiredNamesCheck {
+  if (audience === 'comprador') {
+    if (
+      values.clientFirstName !== null &&
+      !containsName(text, values.clientFirstName)
+    ) {
+      return { ok: false, reason: 'no se dirige al cliente por su nombre' }
+    }
+  } else if (
+    values.ownerFirstName !== '' &&
+    !containsName(text, values.ownerFirstName)
+  ) {
+    return { ok: false, reason: 'no se dirige al propietario por su nombre' }
+  }
+  if (values.agente !== '' && !containsName(text, values.agente)) {
+    return { ok: false, reason: 'no firma con el nombre del agente' }
+  }
+  return { ok: true }
+}
+
 export type OwnerLeakCheck =
   | { leaks: false }
   | { leaks: true; reason: string }
@@ -372,7 +421,8 @@ export type DraftCheck =
 /**
  * Valida un borrador del modelo: primero los marcadores sobre el
  * texto tal como viene (antes de sustituir) y después, ya sustituido,
- * (propietario) sin filtraciones del comprador y sin citas
+ * que se dirija a su destinatario por su nombre y firme con el del
+ * agente, (propietario) sin filtraciones del comprador y sin citas
  * confirmadas ni horas inventadas. Si pasa, devuelve el texto con
  * los marcadores sustituidos, listo para guardar. El motivo es lo que
  * se le añade al mensaje del sistema en el único reintento.
@@ -387,6 +437,10 @@ export function validateDraft(
     return placeholders
   }
   const text = fillPlaceholders(rawText, ctx.placeholders)
+  const names = requiredNames(text, audience, ctx.placeholders)
+  if (!names.ok) {
+    return names
+  }
   if (audience === 'propietario') {
     const budgetValues = ctx.facts
       .filter((fact) => fact.category === 'presupuesto')

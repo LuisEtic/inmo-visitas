@@ -1418,3 +1418,58 @@ acepta por el código, como el criterio 10 de la Fase 5.
   `rules.ts`, sin *secrets* nuevos). Después: criterios 1, 6 y 9 por API
   (borradores y tareas con la nota de ejemplo, «Volver a generar», B → 404,
   sin JWT → 401) y pruebas en el navegador a 360 px en Pages.
+
+### Verificación de `drafts` y corrección de los nombres (Argo, 2026-11-12)
+
+- **Luis desplegó `drafts` él mismo (Via Editor) ~17:39**; confirmado ACTIVO
+  v1 por la Management API. Sin *secrets* nuevos (usa `EXTRACT_*`).
+- **Criterio 9 verificado por API: ALL PASS** — B → 404 `No encontrado`;
+  sin JWT → 401; B no ve tareas ni borradores de A. 409 en nota no
+  aprobada → `Aprueba la nota antes de preparar el seguimiento`.
+- **Datos vivos de la nota de ejemplo (CORRECCIÓN):** Luis editó un
+  dato en su revisión de la Fase 5 y añadió otro — la cita dice ahora
+  `Confirma viernes a las 17h` (editado) y hay un dato nuevo
+  `[observacion] peticion_informacion = 'Pide informe del administrador
+  de cuotas al dia de pago'`. Por eso las 17h y el informe NO eran
+  invenciones del modelo: estaban en los datos. La primera lectura de
+  Argo (que los llamó invenciones) era ERRÓNEA y se corrige aquí.
+- **Defecto real (criterio 1 NO superado):** el modelo sustituye los
+  marcadores por nombres inventados en el borrador del comprador:
+  dos generaciones seguidas dijeron «Hola Carlos» (el propietario) y
+  una firmó «Ana» (la clienta), otra sin firma. Las reglas solo
+  validaban marcadores *presentes*; un modelo que escribe nombres
+  literales las burlaba. Los dos borradores malos se borraron de la
+  base (estaban en `borrador`, no aprobados); la nota queda sin
+  borradores hasta el redespliegue.
+- **Llamada completa (sin `audience`):** 20 intentos 502 seguidos por
+  API y, en cambio, UNA llamada completa de Luis en el navegador sí
+  funcionó (17:46, dos borradores creados con 0,46 s de diferencia).
+  Prueba de concurrencia desde la VM (3 rondas de dos llamadas en
+  paralelo): 200/200, 503/200, 503/503 — NO es un fallo sistemático
+  de paralelismo, es `gemini-3.5-flash-lite` devolviendo 503 «high
+  demand» con una tasa alta hoy. La UI ya tiene «Reintentar»; no se
+  toca el `Promise.all` del prompt.
+- **Corrección aplicada (sin commit aún):** en `drafts/index.ts`, los
+  dos *system prompts* dicen ahora «Escribe los marcadores tal cual,
+  sin sustituirlos por ningún nombre» (mejora de redacción, permitida
+  por el prompt); en `drafts/rules.ts`, `validateDraft` exige ahora
+  que el texto final mencione al destinatario por su nombre de pila
+  y firme con el nombre completo del agente (`requiredNames`, con
+  `containsName`/`escapeRegExp`; sin nombre de cliente si es
+  provisional). Tests nuevos: los dos borradores malos exactos se
+  rechazan, el borrador bueno al propietario con los datos vivos se
+  acepta, la hora 17h se acepta porque está en los datos, y el
+  provisional no exige nombre. **146/146 tests** (141 + 5), `tsc`
+  OK, lint 0 errores, build OK en las dos bases.
+- **Pendiente:** Luis redespliega `drafts` («Deploy update», un clic,
+  despliega `index.ts` + `rules.ts` a la vez). Después: re-verificar
+  por API (criterios 1 y 6: contenido de ambos borradores + tareas
+  propuestas con sus datos de origen; aceptar una tarea y regenerar
+  un destinatario sin tocar las aceptadas) y probar en el navegador
+  a 360 px las pantallas con sesión (la de acceso ya se comprobó:
+  renderiza bien, etiqueta «Fase 6»; `/notas` y `/pendientes`
+  redirigen a `/login` sin sesión; la ventana del navegador de
+  pruebas no bajó a 360 px exactos ni abrió la consola, así que el
+  desbordamiento a 360 px y los errores de consola quedan sin
+  verificar de momento; primera carga mostró la etiqueta vieja
+  «Fase 2» por la caché de la PWA, conocida).

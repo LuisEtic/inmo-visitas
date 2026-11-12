@@ -466,3 +466,119 @@ describe('firstName', () => {
     expect(firstName('  Luis  ')).toBe('Luis')
   })
 })
+
+/**
+ * Datos vivos de la nota de ejemplo tras los cambios de Luis en su
+ * revisión de la Fase 5: la cita lleva «a las 17h» (editado) y hay
+ * un dato nuevo sobre el informe del administrador. Con estos datos,
+ * las 17h y el informe NO son invenciones del modelo: están en los
+ * datos y las reglas los aceptan.
+ */
+const LIVE_FACTS: FactInput[] = [
+  {
+    category: 'objecion',
+    field_name: 'ruido_calle',
+    value: 'Ruido de la calle Alcalá por la noche',
+  },
+  {
+    category: 'cita_pendiente',
+    field_name: 'proxima_visita',
+    value: 'Confirma viernes a las 17h',
+  },
+  {
+    category: 'presupuesto',
+    field_name: 'presupuesto_declarado',
+    value: '230.000 euros',
+  },
+  {
+    category: 'hecho_declarado',
+    field_name: 'acompanante_visita',
+    value: 'Su pareja',
+  },
+  {
+    category: 'hecho_declarado',
+    field_name: 'peticion_informacion',
+    value: 'Gastos de comunidad e IBI',
+  },
+  {
+    category: 'observacion',
+    field_name: 'peticion_informacion',
+    value: 'Pide informe del administrador de cuotas al dia de pago',
+  },
+]
+
+const LIVE_PLACEHOLDERS: PlaceholderValues = {
+  ...PLACEHOLDERS,
+  inmueble: 'V-18 (Calle de Alcalá 120)',
+}
+
+function validateLiveBuyer(raw: string, overrides: Partial<PlaceholderValues> = {}) {
+  return validateDraft(raw, 'comprador', {
+    facts: LIVE_FACTS,
+    clientFullName: 'Ana García',
+    placeholders: { ...LIVE_PLACEHOLDERS, ...overrides },
+  })
+}
+
+function validateLiveOwner(raw: string, overrides: Partial<PlaceholderValues> = {}) {
+  return validateDraft(raw, 'propietario', {
+    facts: LIVE_FACTS,
+    clientFullName: 'Ana García',
+    placeholders: { ...LIVE_PLACEHOLDERS, ...overrides },
+  })
+}
+
+describe('nombres obligatorios (destinatario y firma)', () => {
+  it('rechaza el borrador al comprador dirigido a «Carlos» y firmado «Ana»', () => {
+    const result = validateLiveBuyer(
+      'Hola Carlos,\n\nMuchas gracias por visitar V-18 junto con tu pareja. Entiendo perfectamente tu preocupación respecto al ruido de la calle Alcalá por la noche.\n\nRespecto a los gastos de comunidad, el IBI y el informe del administrador sobre las cuotas al día de pago, ya estoy recopilando toda la información para enviártela lo antes posible.\n\nSobre nuestra próxima cita, me indicas si te viene bien el viernes a las 17 h para dejarlo cerrado definitivamente.\n\nUn saludo,\n\nAna',
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.reason).toContain('firma')
+    }
+  })
+
+  it('rechaza el borrador al comprador dirigido a «Carlos» y sin firma', () => {
+    const result = validateLiveBuyer(
+      'Hola Carlos, muchas gracias por visitar V-18 junto con tu pareja. Entiendo perfectamente vuestra preocupación sobre el ruido de la calle Alcalá por la noche. Respecto a vuestra petición sobre los gastos de comunidad, el IBI y el informe del administrador de cuotas al día de pago, ya me he puesto en marcha para conseguirlos y compartirlos con vosotros cuanto antes. Sobre nuestra próxima visita, me dijiste que querías confirmar el viernes a las 17h, pero dime si te va bien esa hora exacta para dejarlo cerrado. ¡Un abrazo!',
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.reason).toContain('cliente')
+    }
+  })
+
+  it('acepta el borrador bueno al propietario con los datos vivos', () => {
+    const result = validateLiveOwner(
+      'Hola {propietario},\n\nLe escribo tras la visita a {inmueble} realizada con la persona interesada y su pareja. Durante el recorrido, mostraron interés y han solicitado los gastos de comunidad e IBI, además del informe del administrador sobre las cuotas al día de pago. Asimismo, comentaron la percepción de ruido de la calle Alcalá por la noche.\n\nRespecto a los siguientes pasos, quedo a la espera de que me confirme su disponibilidad para este viernes a las 17h, hora en la que valoramos una nueva cita.\n\nAtentamente,\n{agente}',
+    )
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.text).toContain('Hola Carlos,')
+      expect(result.text).toContain('Agente A Prueba')
+      expect(result.text).not.toContain('Ana')
+    }
+  })
+
+  it('acepta la hora 17h porque está en los datos (editada por Luis)', () => {
+    expect(
+      confirmsAppointment(
+        '¿Te viene bien el viernes a las 17h?',
+        LIVE_FACTS,
+      ).confirmed,
+    ).toBe(false)
+  })
+
+  it('con cliente provisional no exige el nombre del cliente', () => {
+    const result = validateLiveBuyer(
+      'Hola, te envío los gastos de comunidad e IBI de {inmueble}. Un saludo, {agente}.',
+      { clientFirstName: null, isProvisional: true },
+    )
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.text).toContain('Hola,')
+      expect(result.text).toContain('Agente A Prueba')
+    }
+  })
+})
