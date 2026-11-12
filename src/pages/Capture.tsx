@@ -22,6 +22,7 @@ import { formatPhone } from '../lib/contact'
 import type { ClientRow, PropertyRow } from '../lib/database.types'
 import { useAuth } from '../lib/auth-context'
 import { matchesClientQuery, matchesPropertyQuery } from '../lib/search'
+import { APP_PHASE_LABEL } from '../lib/app-label'
 
 /**
  * /capturar (privada): elegir cliente e inmueble y crear una nota de
@@ -241,7 +242,7 @@ export default function Capture() {
     <>
       <PrivateNav />
       <main className="mx-auto max-w-4xl bg-bg px-4 py-8 text-text-primary">
-        <p className="font-mono text-xs text-text-secondary">inmo-visitas · Fase 4</p>
+        <p className="font-mono text-xs text-text-secondary">{APP_PHASE_LABEL}</p>
         <h1 className="mt-2 text-2xl">Capturar visita</h1>
         <p className="mt-1 text-sm text-text-secondary">
           Elige cliente e inmueble y deja la nota por voz o por texto.

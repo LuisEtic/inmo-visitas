@@ -22,13 +22,21 @@ export function normalizeForEvidence(text: string): string {
     .trim()
 }
 
+/** Longitud mínima de una cita (igual que en `rules.ts`). */
+export const MIN_QUOTE_WORDS = 2
+export const MIN_QUOTE_CHARS = 8
+
 /**
- * La cita debe aparecer en el texto comparando ambos normalizados.
- * Una cita vacía nunca cuenta como evidencia.
+ * La cita debe tener la longitud mínima y aparecer en el texto
+ * comparando ambos normalizados. Una cita vacía o trivial nunca cuenta
+ * como evidencia.
  */
 export function hasEvidence(quote: string, text: string): boolean {
   const normalizedQuote = normalizeForEvidence(quote)
-  if (normalizedQuote === '') {
+  if (
+    normalizedQuote.length < MIN_QUOTE_CHARS ||
+    normalizedQuote.split(' ').length < MIN_QUOTE_WORDS
+  ) {
     return false
   }
   return normalizeForEvidence(text).includes(normalizedQuote)

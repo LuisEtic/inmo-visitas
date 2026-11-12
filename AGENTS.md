@@ -55,7 +55,10 @@ Normas del proyecto. Leer antes de tocar código, junto con
   revisada por Claude con ajustes (altas por la UI arregladas).
 - Fase 4: captura por voz y texto + transcripción (tag `v0.4-fase-4`,
   migración 0006, Edge Function `transcribe`), cerrada y revisada.
-- Fase 5 (siguiente, solo cuando Luis lo pida): extracción con evidencia +
-  revisión y aprobación. Prompt en `docs/prompts/PROMPT-FASE-5.md`.
+- Fase 5: extracción con evidencia + revisión y aprobación (tag
+  `v0.5-fase-5`, migraciones 0007 y 0008, Edge Function `extract`),
+  revisada por Claude con ajustes (0008: el estado de la nota solo avanza).
+- Fase 6 (siguiente, solo cuando Luis lo pida): borradores duales + bandeja
+  de pendientes. Su prompt se escribe al cerrar la Fase 5.
 - Lista de notas y borradores: Fase 6.
 - Cada pantalla se prueba en el navegador, no solo por API.

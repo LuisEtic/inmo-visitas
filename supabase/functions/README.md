@@ -102,6 +102,14 @@ en `extracted_facts` (estado `extracted`).
   nota, los datos y la respuesta del modelo nunca aparecen en los
   logs ni en las respuestas de error.
 
+### Redespliegue tras la revisión de la Fase 5 (2026-11-12)
+
+La revisión de Claude cambió `index.ts` (dos frases del `SYSTEM_PROMPT`)
+y `rules.ts` (cita mínima de 2 palabras y 8 caracteres; datos sensibles
+también por el valor). Hay que **volver a desplegar `extract`** con los
+dos archivos actualizados (mismos pasos de abajo: editar la función
+existente y pegar ambos). Los *secrets* no cambian.
+
 ### Desplegar sin CLI (la vía de este proyecto)
 
 La función tiene **dos archivos** (`index.ts` y `rules.ts`): hay que

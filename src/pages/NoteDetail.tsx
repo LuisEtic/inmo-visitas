@@ -42,6 +42,7 @@ import type {
   VisitNoteRow,
 } from '../lib/database.types'
 import { useAuth } from '../lib/auth-context'
+import { APP_PHASE_LABEL } from '../lib/app-label'
 
 const noteDateFormatter = new Intl.DateTimeFormat('es-ES', {
   dateStyle: 'medium',
@@ -473,6 +474,11 @@ function NoteDetailView({ id }: { id: string | undefined }) {
     (fact) => fact.review_status === 'descartado',
   )
   const addedCount = factsList.filter((fact) => fact.origin === 'agente').length
+  // «Añadir dato» solo tras la extracción: una nota `transcribed` con un
+  // dato añadido a mano se podría aprobar sin pasar por la extracción, y
+  // la base (migración 0008) no deja aprobar desde `transcribed`.
+  const canAddFact =
+    note?.status === 'extracted' || note?.status === 'reviewed'
   const canReextract =
     note?.status === 'extracted' &&
     facts !== null &&
@@ -631,7 +637,7 @@ function NoteDetailView({ id }: { id: string | undefined }) {
     <>
       <PrivateNav />
       <main className="mx-auto max-w-4xl bg-bg px-4 py-8 text-text-primary">
-        <p className="font-mono text-xs text-text-secondary">inmo-visitas · Fase 4</p>
+        <p className="font-mono text-xs text-text-secondary">{APP_PHASE_LABEL}</p>
 
         {!supabaseConfigured && (
           <div className="mt-6">
@@ -901,7 +907,7 @@ function NoteDetailView({ id }: { id: string | undefined }) {
                   </div>
                 )}
 
-                {!isApproved && (
+                {canAddFact && (
                   <div className="mt-6">
                     {!showAddFact && (
                       <Button

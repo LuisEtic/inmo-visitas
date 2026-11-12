@@ -51,6 +51,8 @@ const SYSTEM_PROMPT =
   'presupuesto (cifra que el cliente declaró; es un presupuesto DECLARADO, nunca solvencia, financiación ni capacidad de pago acreditada), ' +
   'cita_pendiente (visitas o llamadas futuras; NUNCA las des por confirmadas salvo que la nota diga que están confirmadas con día y hora), ' +
   'desconocido (datos que faltan o están sin confirmar). ' +
+  'Lo que falta o está sin confirmar (por ejemplo, la hora de una visita) va ADEMÁS como dato desconocido propio, con su propia cita. ' +
+  'Cada cita debe tener al menos dos palabras seguidas de la nota. ' +
   'No inventes nada que no esté en la nota. ' +
   'No extraigas datos de salud, origen, religión, ideología, orientación sexual ni otros datos especialmente protegidos. ' +
   'Si no hay datos, devuelve {"facts": []}.'

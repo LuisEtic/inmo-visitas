@@ -5,6 +5,7 @@ import { PrivateNav } from '../components/PrivateNav'
 import { SupabaseMissingNotice } from '../components/SupabaseMissingNotice'
 import { useAuth } from '../lib/auth-context'
 import { supabase } from '../lib/supabase'
+import { APP_PHASE_LABEL } from '../lib/app-label'
 
 /**
  * / (privada, inicio): saludo al agente y enlaces a las secciones de
@@ -52,7 +53,7 @@ export default function Home() {
       <PrivateNav />
       <main className="mx-auto max-w-4xl bg-bg px-4 py-12 text-text-primary">
         <p className="font-mono text-xs text-text-secondary">
-          inmo-visitas · Fase 5
+          {APP_PHASE_LABEL}
         </p>
         <h1 className="mt-2 text-2xl">Hola, {displayName ?? fallbackName}</h1>
         <p className="mt-2 text-base text-text-secondary">

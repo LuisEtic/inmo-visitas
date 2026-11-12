@@ -21,6 +21,7 @@ import {
   PROPERTY_STATUS_LABELS,
   type PropertyFormValues,
 } from '../features/properties/schema'
+import { APP_PHASE_LABEL } from '../lib/app-label'
 
 /**
  * /inmuebles/nuevo y /inmuebles/:id (privadas): el mismo formulario para
@@ -154,7 +155,7 @@ function PropertyDetailView({ id }: { id: string | undefined }) {
     <>
       <PrivateNav />
       <main className="mx-auto max-w-md bg-bg px-4 py-8 text-text-primary">
-        <p className="font-mono text-xs text-text-secondary">inmo-visitas · Fase 3</p>
+        <p className="font-mono text-xs text-text-secondary">{APP_PHASE_LABEL}</p>
         <h1 className="mt-2 text-2xl">
           {isNew ? (
             'Nuevo inmueble'

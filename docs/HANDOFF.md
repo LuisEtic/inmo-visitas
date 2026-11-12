@@ -1018,3 +1018,109 @@ la Fase 3), en Claude Code:
     `2f328d2c-…`, V-54, V-52 de A, V-52 y V-18 de B, nota sobre
     David Romero). La extracción en vivo creará los datos de la
     nota de ejemplo.
+
+---
+
+## Revisión de la Fase 5 (Claude, sin cambio de fase)
+
+Revisión del 2026-11-12 (`v0.4-fase-4..7acc07e`, tag `v0.5-fase-5` +
+parche de la etiqueta de inicio + docs), en Claude Code. Ajustes
+aprobados por Luis (I-1, I-2 y mejoras 1–5).
+
+**Comprobado sobre la entrega de Muse:**
+
+- `npm ci`, `tsc --noEmit`, `npm test` (88/88), `npm run lint` (0
+  errores, 2 avisos previos de shadcn) y `npm run build` sin errores.
+- **`deno check supabase/functions/extract/index.ts` OK** (Deno 2.9.6):
+  pendiente del HANDOFF resuelto.
+- Migraciones 0001–0007 en PostgreSQL 16 temporal con `auth` y
+  `storage` simulados; la 0007 se puede aplicar dos veces;
+  `docs/deploy/supabase-fase-5.sql` idéntico a la migración.
+- Triggers: `datos_sin_revisar`, `nota_aprobada` (cambiar, añadir o
+  borrar un dato y tocar el texto) y `texto_bloqueado` saltan cuando
+  deben; borrar una nota aprobada borra sus datos sin error.
+- Prueba negativa de RLS: B ve 0 datos de A, su `update` no afecta a
+  ninguna fila y su `insert` en una nota de A lo rechaza la RLS.
+- Pruebas en navegador de Luis (12 nov.): los puntos 1–6 de la nota de
+  ejemplo, **«Extraer datos» en su nota de voz** (`2f328d2c-…`) y **V-55
+  prellenado** en `/inmuebles/nuevo` (pendiente del parche de la Fase
+  3), todo OK.
+
+**Encontrado y corregido en este PR:**
+
+- **I-1 (Importante): la nota podía volver atrás de estado.** Con dos
+  `update` por API (`status = 'transcribed'` y luego `raw_text`) se
+  cambiaba el texto de una nota ya extraída: los datos quedaban con
+  citas que no estaban en el texto y la nota se podía aprobar.
+- **I-2 (Importante): se podía aprobar sin extracción.** La base
+  aceptaba `draft`/`transcribed` → `approved`, incluso sin datos; en la
+  UI, «Añadir dato» aparecía ya en `transcribed` y con un dato añadido
+  se activaba «Aprobar nota».
+- **Migración `0008_ajustes_revision_fase_5.sql`** (la 0007 no se
+  toca; idempotente; `docs/deploy/supabase-fase-5-ajustes.sql` idéntica):
+  - `visit_notes_guard` sustituida: transiciones solo hacia delante
+    (`draft → transcribed → extracted (→ extracted) → reviewed →
+    approved`, y `extracted → approved`); cualquier otra →
+    `transicion_no_valida` (P0001). Aprobar exige además al menos un
+    dato no descartado → si no, `nota_sin_datos` (P0001).
+  - Trigger nuevo `visit_notes_insert_guard` (`before insert`): una
+    nota nace en `draft` o `transcribed`, sin `extracted_at` ni
+    `approved_at`; si no, `transicion_no_valida`.
+  - Probado en PostgreSQL: 0001–0008 por migraciones y todo concatenado
+    en base vacía; 0008 aplicada dos veces; altas de voz y texto,
+    flujo de `transcribe` (`draft → transcribed` con texto), flujo de
+    `extract` (insertar, borrar los de IA, `→ extracted`, re-extraer),
+    `extracted → reviewed → approved` OK; `extracted → transcribed`,
+    `reviewed → extracted`, `draft/transcribed → approved` y alta en
+    `approved` → `transicion_no_valida`; todo descartado →
+    `nota_sin_datos`.
+- `translateDbError`: `transicion_no_valida` → «La nota no puede pasar
+  a ese estado»; `nota_sin_datos` → «La nota necesita al menos un dato
+  no descartado para aprobarla» (con test).
+- `NoteDetail.tsx`: «Añadir dato» solo en `extracted` o `reviewed`
+  (`canAddFact`).
+- **Mejora 1, cita mínima:** `hasEvidence` exige al menos 2 palabras y
+  8 caracteres (normalizada) en `rules.ts` y en la copia
+  `src/features/extraction/evidence.ts`. Test de paridad nuevo en
+  `rules.test.ts` que compara las dos copias con las mismas citas.
+- **Mejora 2, datos sensibles por valor:** `isSensitiveFact` =
+  `isSensitiveField(field_name)` o `isSensitiveValue(value)`;
+  `SENSITIVE_VALUE_PATTERNS` (salud, enfermedad, diagnóstico, religión,
+  etnia, raza, nacionalidad, orientación sexual, ideología, afiliación
+  política, sindicato, embarazo, discapacidad) sin tildes y con límite
+  de palabra. No marca «terraza», «saludos», «el origen del ruido» ni
+  «política de mascotas» (tests). La cita no se mira.
+- **Mejora 3, errores de `extract`:** `extractNote` muestra el mensaje
+  propio de la función en 400 y 409 («La nota ya está en revisión»); el
+  resto sigue con el mensaje genérico.
+- **Mejora 4, `SYSTEM_PROMPT`:** dos frases nuevas: lo que falta o está
+  sin confirmar va además como dato `desconocido` con su propia cita, y
+  cada cita tiene al menos dos palabras seguidas de la nota.
+- **Mejora 5, documentación y etiqueta:** este bloque sustituye a los
+  «⏳ pendiente» del HANDOFF FASE 5 (criterios 1, 4–8 y 12 verificados
+  por Luis o por API; 11 completo con `deno check`). La etiqueta de
+  fase de cada pantalla pasa a una constante única,
+  `src/lib/app-label.ts` (`APP_PHASE_LABEL`): `/notas/:id`,
+  `/capturar`, clientes, inmuebles y login decían «Fase 2/3/4».
+- Tras los ajustes: `tsc --noEmit`, `npm test` **94/94**, `npm run
+  lint` (0 errores, 2 avisos previos), `npm run build` con base
+  `/inmo-visitas/` (trozo mayor 255 kB) y `deno check` de `extract`
+  sin errores. Navegador (Playwright, 360 px, Supabase simulado):
+  `transcribed` sin «Añadir dato» y el 409 muestra «La nota ya está en
+  revisión»; `extracted` con «Añadir dato»; sin desbordamiento ni
+  errores de consola.
+
+**Pendiente:**
+
+- **Luis (antes de la Fase 6):** 1) pegar
+  `docs/deploy/supabase-fase-5-ajustes.sql` en el SQL Editor;
+  2) volver a desplegar `extract` con `index.ts` y `rules.ts`
+  actualizados (`supabase/functions/README.md`); 3) desplegar Pages.
+  Comprobación rápida: «Volver a extraer» o «Extraer datos» en una
+  nota nueva de prueba sigue dando datos, y la nota de ejemplo ya
+  aprobada sigue en solo lectura.
+- **Criterio 9 sin probar en vivo** (502 sin clave o con el proveedor
+  caído). Por el código: devuelve 502 antes de escribir nada y la nota
+  sigue en `transcribed`. Se acepta así.
+- Notas aprobadas antes de la 0008: no cambian (la 0008 no reescribe
+  datos).

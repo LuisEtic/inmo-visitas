@@ -24,7 +24,7 @@ export function translateDbError(
     return 'No tienes permiso para esta acción'
   }
   if (error.code === 'P0001') {
-    // Excepciones de los triggers de revisión (migración 0007): el
+    // Excepciones de los triggers de revisión (migraciones 0007 y 0008): el
     // mensaje es el nombre del error que lanza el trigger.
     if (error.message.includes('nota_aprobada')) {
       return 'La nota está aprobada y ya no se puede cambiar'
@@ -34,6 +34,13 @@ export function translateDbError(
     }
     if (error.message.includes('texto_bloqueado')) {
       return 'El texto ya no se puede corregir: tiene datos extraídos'
+    }
+    // Migración 0008 (revisión de la Fase 5).
+    if (error.message.includes('transicion_no_valida')) {
+      return 'La nota no puede pasar a ese estado'
+    }
+    if (error.message.includes('nota_sin_datos')) {
+      return 'La nota necesita al menos un dato no descartado para aprobarla'
     }
   }
   return 'Ha ocurrido un error. Inténtalo de nuevo.'

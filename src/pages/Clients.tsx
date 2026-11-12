@@ -10,6 +10,7 @@ import type { ClientRow } from '../lib/database.types'
 import { useAuth } from '../lib/auth-context'
 import { matchesClientQuery } from '../lib/search'
 import { listClients } from '../features/clients/api'
+import { APP_PHASE_LABEL } from '../lib/app-label'
 
 /**
  * /clientes (privada): lista de clientes del agente con buscador
@@ -60,7 +61,7 @@ export default function Clients() {
       <main className="mx-auto max-w-4xl bg-bg px-4 py-8 text-text-primary">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="font-mono text-xs text-text-secondary">inmo-visitas · Fase 3</p>
+            <p className="font-mono text-xs text-text-secondary">{APP_PHASE_LABEL}</p>
             <h1 className="mt-2 text-2xl">Clientes</h1>
             <p className="mt-1 text-sm text-text-secondary">{countLabel}</p>
           </div>
