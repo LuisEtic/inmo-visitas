@@ -62,7 +62,8 @@ Normas del proyecto. Leer antes de tocar código, junto con
 - Fase 6: borradores duales + bandeja de pendientes + lista de notas
   (tag `v0.6-fase-6`, migración 0009, Edge Function `drafts`), revisada
   por Claude con ajustes en las reglas de `drafts` (presupuesto, horas,
-  nombres, citas, provisionales) y «Generar borrador». Se cierra tras
-  redesplegar `drafts` v4 y Pages.
-- Fase 7 (siguiente, solo cuando Luis lo pida): exportación CRM y WhatsApp.
+  nombres, citas, provisionales) y «Generar borrador». Cerrada el
+  2026-11-12 (`drafts` v4 y Pages `1ecc966`).
+- Fase 7 (siguiente, solo cuando Luis lo pida): exportación CRM y WhatsApp
+  (prompt en `docs/prompts/PROMPT-FASE-7.md`).
 - Cada pantalla se prueba en el navegador, no solo por API.

@@ -1681,3 +1681,24 @@ página; «Generar borrador» llama a `drafts` con `audience:
   GitHub de Luis, como en los despliegues anteriores, para subirlo.
   En vivo sigue la versión anterior (MD5
   `21ac74e98b392e820870e80662cb8b4d`).
+
+### Cierre de la Fase 6 (Claude, 2026-11-12)
+
+- **Pages desplegado por Muse:** `gh-pages` `1ecc966` («Pages: Fase 6 +
+  revisión PR #10»); MD5 del `index.html` en `gh-pages` =
+  `d0c7de688d7c4cabed070436b7733870`, el mismo de la build local de Argo
+  sobre `main`, y Muse lo comprobó en vivo. Claude no puede abrir la web
+  desde su entorno (el proxy bloquea `github.io`), así que comprobó
+  `gh-pages` contra una build propia de `main` (`e9c4cee`): los trozos
+  `NoteDetail` y `Pending` son idénticos salvo los *hashes* de los
+  nombres, `NoteDetail` tiene «Generar borrador» y «Escribir yo», y la
+  etiqueta es «inmo-visitas · Fase 6».
+- **`drafts` v4** activa y verificada por Argo (bloque anterior).
+- Token de GitHub de Muse borrado tras el despliegue.
+- **Fase 6 cerrada.** Quedan aplazados B-1 a B-4 y, de la verificación de
+  Argo, **B-5**: el borrador puede afirmar cosas del inmueble que no están
+  en los datos («buenos cerramientos…»); ninguna regla lo comprueba.
+  Propuesta para la Fase 9: endurecer el `SYSTEM_PROMPT` de `drafts` y
+  medirlo en el piloto.
+- **Siguiente:** prompt de la Fase 7 en `docs/prompts/PROMPT-FASE-7.md`
+  (exportación al CRM y WhatsApp). Se lanza solo cuando Luis lo pida.
