@@ -8,6 +8,7 @@ import { SupabaseMissingNotice } from '../components/SupabaseMissingNotice'
 import { formatPriceEs } from '../lib/contact'
 import type { PropertyRow, PropertyStatus } from '../lib/database.types'
 import { useAuth } from '../lib/auth-context'
+import { APP_PHASE_LABEL } from '../lib/app-label'
 import { matchesPropertyQuery } from '../lib/search'
 import { listProperties } from '../features/properties/api'
 import { PROPERTY_STATUS_LABELS } from '../features/properties/schema'
@@ -76,7 +77,7 @@ export default function Properties() {
       <main className="mx-auto max-w-4xl bg-bg px-4 py-8 text-text-primary">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="font-mono text-xs text-text-secondary">inmo-visitas · Fase 3</p>
+            <p className="font-mono text-xs text-text-secondary">{APP_PHASE_LABEL}</p>
             <h1 className="mt-2 text-2xl">Inmuebles</h1>
             <p className="mt-1 text-sm text-text-secondary">{countLabel}</p>
           </div>

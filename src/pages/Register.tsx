@@ -7,6 +7,7 @@ import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { SupabaseMissingNotice } from '../components/SupabaseMissingNotice'
 import { useAuth } from '../lib/auth-context'
+import { APP_PHASE_LABEL } from '../lib/app-label'
 import { mapAuthErrorMessage } from '../lib/auth-errors'
 import { supabase } from '../lib/supabase'
 
@@ -83,7 +84,7 @@ export default function Register() {
   return (
     <main className="mx-auto max-w-md bg-bg px-4 py-12 text-text-primary">
       <p className="font-mono text-xs text-text-secondary">
-        inmo-visitas · Fase 2
+        {APP_PHASE_LABEL}
       </p>
       <h1 className="mt-2 text-2xl">Crear cuenta de agente</h1>
       <p className="mt-2 text-base text-text-secondary">
