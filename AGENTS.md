@@ -60,6 +60,7 @@ Normas del proyecto. Leer antes de tocar código, junto con
   revisada por Claude con ajustes (0008: el estado de la nota solo avanza).
   Cerrada el 2026-11-12 (Pages desplegado y prueba rápida en vivo).
 - Fase 6 (siguiente, solo cuando Luis lo pida): borradores duales + bandeja
-  de pendientes. Su prompt se escribe cuando Luis lo pida.
+  de pendientes + lista de notas. Prompt en `docs/prompts/PROMPT-FASE-6.md`
+  (migración 0009, Edge Function `drafts`).
 - Lista de notas y borradores: Fase 6.
 - Cada pantalla se prueba en el navegador, no solo por API.
