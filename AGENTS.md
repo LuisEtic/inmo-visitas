@@ -59,8 +59,10 @@ Normas del proyecto. Leer antes de tocar código, junto con
   `v0.5-fase-5`, migraciones 0007 y 0008, Edge Function `extract`),
   revisada por Claude con ajustes (0008: el estado de la nota solo avanza).
   Cerrada el 2026-11-12 (Pages desplegado y prueba rápida en vivo).
-- Fase 6 (siguiente, solo cuando Luis lo pida): borradores duales + bandeja
-  de pendientes + lista de notas. Prompt en `docs/prompts/PROMPT-FASE-6.md`
-  (migración 0009, Edge Function `drafts`).
-- Lista de notas y borradores: Fase 6.
+- Fase 6: borradores duales + bandeja de pendientes + lista de notas
+  (tag `v0.6-fase-6`, migración 0009, Edge Function `drafts`), revisada
+  por Claude con ajustes en las reglas de `drafts` (presupuesto, horas,
+  nombres, citas, provisionales) y «Generar borrador». Se cierra tras
+  redesplegar `drafts` v4 y Pages.
+- Fase 7 (siguiente, solo cuando Luis lo pida): exportación CRM y WhatsApp.
 - Cada pantalla se prueba en el navegador, no solo por API.

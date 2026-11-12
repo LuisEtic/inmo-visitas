@@ -83,6 +83,17 @@ export function buyerFacts(facts: FactInput[]): FactInput[] {
   }))
 }
 
+/**
+ * Valores de los datos `presupuesto` de la nota (de TODOS los no
+ * descartados, no de `ownerFacts`, que ya no los lleva): con ellos se
+ * comprueba que el borrador al propietario no revela el presupuesto.
+ */
+export function budgetValuesOf(facts: FactInput[]): string[] {
+  return facts
+    .filter((fact) => fact.category === 'presupuesto')
+    .map((fact) => fact.value)
+}
+
 function isFinanceFact(fact: FactInput): boolean {
   return (
     matchesFinanceTerm(fact.field_name) ||
@@ -264,35 +275,72 @@ export function containsName(text: string, name: string): boolean {
 export type RequiredNamesCheck = { ok: true } | { ok: false; reason: string }
 
 /**
- * El borrador final debe dirigirse a su destinatario por su nombre de
- * pila y firmar con el nombre completo del agente. Si el modelo
- * sustituye los marcadores por nombres inventados (p. ej. dirige el
- * borrador del comprador a «Carlos» y lo firma «Ana»), el texto no
- * contiene los nombres reales y se rechaza, aunque no haya marcadores
- * desconocidos que rechazar.
+ * Saludo del borrador: el texto hasta la primera coma, dos puntos,
+ * exclamación o salto de línea («Hola Ana,» → «Hola Ana»).
+ */
+export function greetingOf(text: string): string {
+  return text.trim().split(/[,:;!\n]/)[0] ?? ''
+}
+
+/**
+ * El borrador final debe saludar a su destinatario por su nombre de
+ * pila (en el saludo, no en cualquier parte del texto) y firmar con el
+ * nombre completo del agente. El del comprador, además, no puede
+ * nombrar al propietario. Si el modelo sustituye los marcadores por
+ * nombres inventados (p. ej. «Hola Carlos» en el del comprador), se
+ * rechaza aunque el nombre real aparezca en otro sitio.
  */
 export function requiredNames(
   text: string,
   audience: DraftAudience,
   values: PlaceholderValues,
 ): RequiredNamesCheck {
+  const greeting = greetingOf(text)
   if (audience === 'comprador') {
     if (
       values.clientFirstName !== null &&
-      !containsName(text, values.clientFirstName)
+      !containsName(greeting, values.clientFirstName)
     ) {
-      return { ok: false, reason: 'no se dirige al cliente por su nombre' }
+      return { ok: false, reason: 'no saluda al cliente por su nombre' }
+    }
+    const owner = values.ownerFirstName
+    if (
+      owner.length >= 3 &&
+      foldAccents(owner) !== foldAccents(values.clientFirstName ?? '') &&
+      !containsName(values.agente, owner) &&
+      containsName(text, owner)
+    ) {
+      return {
+        ok: false,
+        reason: 'menciona al propietario por su nombre en el borrador al comprador',
+      }
     }
   } else if (
     values.ownerFirstName !== '' &&
-    !containsName(text, values.ownerFirstName)
+    !containsName(greeting, values.ownerFirstName)
   ) {
-    return { ok: false, reason: 'no se dirige al propietario por su nombre' }
+    return { ok: false, reason: 'no saluda al propietario por su nombre' }
   }
   if (values.agente !== '' && !containsName(text, values.agente)) {
     return { ok: false, reason: 'no firma con el nombre del agente' }
   }
   return { ok: true }
+}
+
+/** Quita los separadores de miles: «230.000» y «230 000» → «230000». */
+export function joinThousands(text: string): string {
+  return text.replace(/(\d)[. \u00a0](?=\d{3}(?!\d))/g, '$1')
+}
+
+/**
+ * Cifras de un valor de presupuesto, sin separadores, de 4 dígitos o
+ * más («230.000 euros» → «230000»). Las de menos dígitos («230 mil»)
+ * ya las atrapa el patrón de cifras de dinero.
+ */
+export function budgetFigures(value: string): string[] {
+  return (joinThousands(value).match(/\d+/g) ?? []).filter(
+    (figure) => figure.length >= 4,
+  )
 }
 
 export type OwnerLeakCheck =
@@ -321,15 +369,15 @@ export function ownerLeaks(
   if (containsMoneyFigure(text)) {
     return { leaks: true, reason: 'contiene una cifra de dinero' }
   }
+  // Cifras del texto sin separadores de miles: «230.000» → «230000».
+  const foldedDigits = joinThousands(folded)
   for (const value of ctx.budgetValues) {
     const foldedValue = foldAccents(value).trim()
     if (foldedValue !== '' && folded.includes(foldedValue)) {
       return { leaks: true, reason: 'revela el presupuesto del comprador' }
     }
-    const digits = value.replace(/\D/g, '')
-    if (digits.length >= 3) {
-      const digitsPattern = new RegExp(`\\b${digits}\\b`)
-      if (digitsPattern.test(folded)) {
+    for (const figure of budgetFigures(value)) {
+      if (new RegExp(`(?<!\\d)${figure}(?!\\d)`).test(foldedDigits)) {
         return { leaks: true, reason: 'revela el presupuesto del comprador' }
       }
     }
@@ -356,21 +404,58 @@ const CONFIRMED_PATTERNS: readonly RegExp[] = [
   /hemos quedado/,
 ]
 
-/** Horas: `18:00`, `18.00`, `18h00` y `a las 6`. */
+/**
+ * Horas: `18:00`, `18.00`, `18h00`, `18h`, `18 h` y `a las 6`. Se
+ * buscan TODAS las del texto (no solo la primera).
+ */
 const HOUR_PATTERNS: readonly RegExp[] = [
-  /\b\d{1,2}[:.h]\d{2}\b/,
-  /\ba las \d/,
+  /(?<![\d.,])(\d{1,2})[:.h](\d{2})(?![\d.,]?\d)/g,
+  /\ba las (\d{1,2})(?:[:.h](\d{2}))?(?![\d.,]?\d)/g,
+  /(?<![\d.,])(\d{1,2}) ?h\b/g,
 ]
 
-/** Un dato dice que una cita está confirmada. */
-function factConfirms(fact: FactInput): boolean {
-  return /confirmad[oa]/.test(foldAccents(fact.value))
+/**
+ * Hora encontrada: `key` normalizada `H:MM` en formato de 12 horas
+ * (17:00 y 5:00 son la misma) y `raw`, el trozo tal como aparece.
+ */
+export type ClockTime = { key: string; raw: string }
+
+/** Todas las horas de un texto, normalizadas. */
+export function hoursIn(text: string): ClockTime[] {
+  const folded = foldAccents(text)
+  const found = new Map<string, ClockTime>()
+  for (const pattern of HOUR_PATTERNS) {
+    for (const match of folded.matchAll(pattern)) {
+      const hour = Number(match[1])
+      const minute = match[2] === undefined ? 0 : Number(match[2])
+      if (hour > 23 || minute > 59) {
+        continue
+      }
+      const key = `${hour % 12}:${String(minute).padStart(2, '0')}`
+      if (!found.has(key)) {
+        found.set(key, { key, raw: match[0].trim() })
+      }
+    }
+  }
+  return [...found.values()]
+}
+
+/**
+ * Un dato dice que una cita está confirmada. «No confirmada», «sin
+ * confirmar», «por confirmar» o «pendiente de confirmar» NO cuentan.
+ */
+export function factConfirms(fact: FactInput): boolean {
+  const folded = foldAccents(fact.value)
+  if (/\b(no|sin|por|falta|pendiente)\b[^.;]{0,20}confirm/.test(folded)) {
+    return false
+  }
+  return /confirmad[oa]/.test(folded)
 }
 
 /**
  * Rechazo si el borrador da por confirmada una cita (salvo que un
- * dato no descartado diga que está confirmada) o si menciona una hora
- * que no está en ningún `value` de los datos.
+ * dato no descartado diga que está confirmada) o si menciona alguna
+ * hora que no está en ningún `value` de los datos.
  */
 export function confirmsAppointment(
   text: string,
@@ -388,19 +473,14 @@ export function confirmsAppointment(
       }
     }
   }
-  for (const pattern of HOUR_PATTERNS) {
-    const match = folded.match(pattern)
-    if (match !== null) {
-      const hourDigits = match[0].replace(/\D/g, '')
-      const inFacts = facts.some((fact) => {
-        const valueDigits = fact.value.replace(/\D/g, '')
-        return valueDigits.includes(hourDigits)
-      })
-      if (!inFacts) {
-        return {
-          confirmed: true,
-          reason: `menciona la hora ${match[0].trim()}, que no está en los datos`,
-        }
+  const factHours = new Set(
+    facts.flatMap((fact) => hoursIn(fact.value).map((hour) => hour.key)),
+  )
+  for (const hour of hoursIn(text)) {
+    if (!factHours.has(hour.key)) {
+      return {
+        confirmed: true,
+        reason: `menciona la hora ${hour.raw}, que no está en los datos`,
       }
     }
   }
@@ -410,6 +490,12 @@ export function confirmsAppointment(
 export type DraftValidationContext = {
   /** Datos no descartados (los mismos que se enviaron al modelo). */
   facts: FactInput[]
+  /**
+   * Valores de TODOS los datos `presupuesto` no descartados de la nota.
+   * Van aparte porque los datos del propietario (`ownerFacts`) ya no
+   * los llevan: sin esto, el control del presupuesto no veía nada.
+   */
+  budgetValues: string[]
   clientFullName: string
   placeholders: PlaceholderValues
 }
@@ -442,11 +528,8 @@ export function validateDraft(
     return names
   }
   if (audience === 'propietario') {
-    const budgetValues = ctx.facts
-      .filter((fact) => fact.category === 'presupuesto')
-      .map((fact) => fact.value)
     const leak = ownerLeaks(text, {
-      budgetValues,
+      budgetValues: ctx.budgetValues,
       clientFullName: ctx.clientFullName,
     })
     if (leak.leaks) {

@@ -1544,3 +1544,110 @@ acepta por el código, como el criterio 10 de la Fase 5.
   Datos de prueba nuevos de Luis: 5 notas transcritas más de Ana +
   V-18 y 2 en borrador (Ana V-18 y David Romero V-12).
 - **Criterio 12 VERIFICADO.** Queda solo la revisión de Claude.
+
+## Revisión de la Fase 6 (Claude, sin cambio de fase)
+
+Revisión del 2026-11-12 sobre `main` en `e8fb5fe` (tag `v0.6-fase-6`
++ corrección `requiredNames` + docs de Argo), en Claude Code. Ajustes
+aprobados por Luis (A-1, A-2 y M-1 a M-4).
+
+**Comprobado sobre la entrega:**
+
+- `npm ci`, `npx tsc --noEmit`, `npm test` (146/146), `npm run lint`
+  (0 errores, los 2 avisos de shadcn) y `npm run build` sin errores;
+  trozo mayor `vendor-react` 255.497 B.
+- **`deno check supabase/functions/drafts/index.ts` OK** (Deno 2.9.6):
+  pendiente del HANDOFF resuelto.
+- Migraciones 0001–0009 en PostgreSQL 16 temporal con `auth` y
+  `storage` simulados; la 0009 se aplica dos veces sin error;
+  `docs/deploy/supabase-fase-6.sql` idéntico a la migración.
+- **Criterio 4 reproducido en local** (coincide con el 18/18 de Argo):
+  `nota_no_aprobada` (tarea y borrador), `fuente_no_valida`,
+  `transicion_no_valida` (tarea a mano como `propuesta`,
+  `completada → propuesta`, borrar una tarea `completada` de la IA),
+  `original_description`, `completed_at`, `original_content` +
+  `edited_at`, único por destinatario, check de longitud,
+  `borrador_aprobado` al editar y al borrar, y borrado de la nota
+  aprobada en cascada sin error.
+- Prueba negativa de RLS: B ve 0 tareas y 0 borradores de A, sus
+  `update`/`delete` no afectan a ninguna fila y sus `insert` sobre la
+  nota de A se rechazan.
+- Mensaje 409 «Aprueba la nota antes de preparar el seguimiento»
+  (`drafts/index.ts`) correcto y mostrado tal cual por
+  `followup/api.ts`. Criterios 6, 9 y 10 coherentes con el código.
+- **Criterio 12:** checklist en el navegador hecha por Luis el 12 nov.
+  (portada, `/notas`, `/notas/:id` «Seguimiento», `/pendientes`, sin
+  desbordamiento a 360 px): todo OK.
+
+**Encontrado y corregido en este PR** (solo `drafts/rules.ts`,
+`drafts/index.ts`, `rules.test.ts` y `NoteDetail.tsx`; sin migración):
+
+- **A-1 (Alta): el control del presupuesto en el borrador al
+  propietario no hacía nada en producción.** `index.ts` validaba el
+  borrador al propietario con `ownerFacts`, que ya no lleva el dato
+  `presupuesto`, así que `budgetValues` llegaba siempre vacío: «el
+  cliente habló de 230000» o «230.000» (sin €) se aceptaban. El test
+  de «230000» pasaba solo porque llevaba «euros». Ahora el contexto de
+  `validateDraft` recibe `budgetValues` aparte (`budgetValuesOf` con
+  TODOS los datos) y las cifras se comparan sin separadores de miles
+  (`joinThousands`, `budgetFigures`: «230000», «230.000», «230 000»).
+- **A-2 (Alta): horas inventadas aceptadas.** `a las \d` capturaba un
+  solo dígito («a las 18» pasaba con un dato «17h»; «a las 21h»
+  pasaba por el «2» de «230.000») y solo se miraba la primera hora de
+  cada patrón. Ahora `hoursIn` busca TODAS las horas (`18:00`, `18.00`,
+  `18h00`, `18h`, `a las 6`), las normaliza (17:00 = 17h = 5:00) y
+  cada una tiene que estar en algún dato.
+- **M-1 (Media): `requiredNames` no miraba el saludo.** «Hola Carlos,
+  Ana, …» firmado por el agente se aceptaba, y el borrador al
+  comprador podía nombrar al propietario. Ahora el nombre de pila del
+  destinatario tiene que ir en el saludo (`greetingOf`) y el borrador
+  al comprador se rechaza si nombra al propietario.
+- **M-2 (Media): una negación desactivaba el control de citas.** Un
+  dato «no confirmada» contaba como cita confirmada y dejaba pasar
+  «queda confirmada». `factConfirms` ignora ahora «no / sin / por /
+  falta / pendiente … confirm».
+- **M-3 (Media): callejón sin salida tras un 422.** La tarjeta
+  «Escribir yo» dependía de un estado en memoria: tras recargar, el
+  destinatario sin borrador desaparecía y no había forma de crearlo.
+  Ahora la tarjeta sale siempre que falta el borrador, con «Generar
+  borrador» (llama a `drafts` solo con ese `audience`) y «Escribir
+  yo». Además, «Reintentar» repite la última llamada (si fue «Volver
+  a generar» de un destinatario, no regenera el otro).
+- **M-4 (Media): clientes provisionales no detectados.** La función
+  buscaba el prefijo `provisional:` en `full_name`, pero el modelo usa
+  `clients.is_temporary`. Ahora lee `is_temporary` y, si es provisional,
+  el saludo va sin nombre («Hola,»).
+
+**Verificado tras los ajustes:** `npm test` **160/160** (146 + 14
+nuevos en `rules.test.ts`, incluidos el borrador bueno del comprador
+de la v3 y el bueno del propietario con los datos vivos, que siguen
+pasando), `tsc --noEmit`, `npm run build` en base `/` y
+`/inmo-visitas/`, lint 0 errores, `deno check` de `drafts` OK.
+Navegador a 360 px con Supabase simulado: la tarjeta del comprador sin
+borrador muestra «Generar borrador» y «Escribir yo» al cargar la
+página; «Generar borrador» llama a `drafts` con `audience:
+"comprador"`; sin desbordamiento ni errores de consola.
+
+**Aplazado (baja; anotado para la Fase 9 o el pulido):**
+
+- B-1: si el borrador del comprador falla las reglas (422 sin
+  `audience`), la tarea de regla de la cita pendiente no se crea.
+- B-2: escrituras no atómicas en `drafts` (borrar + insertar borrador
+  y luego tareas): un fallo a mitad deja un 502 con parte guardada.
+- B-3: falsos positivos de las reglas que pueden dar 422 repetidos:
+  «la entrada del edificio» (término `entrada`), «Calle 3 Milagros»
+  (cifra de dinero), agente que comparte apellido con el cliente, «te
+  confirmo los gastos».
+- B-4: `tasks_guard`/`drafts_guard` no vuelven a comprobar
+  `visit_note_id`, `origin` ni `audience` en un `update` (se puede
+  mover una tarea a una nota no aprobada o cambiar su origen).
+
+**Pendiente tras fusionar este PR:**
+
+1. **Luis:** redesplegar `drafts` (v4) pegando de nuevo `index.ts` y
+   `rules.ts` desde `main` y «Deploy update». Comprobar que entró: en
+   el editor, `rules.ts` tiene `budgetValuesOf` y `hoursIn`.
+2. **Argo:** «Volver a generar» el comprador de la nota de ejemplo
+   por API y comprobar que sale «Hola Ana,» y firma del agente.
+3. **Muse:** desplegar Pages con el cambio de `NoteDetail.tsx`.
+4. Después, Claude cierra la Fase 6 y escribe el prompt de la Fase 7.
