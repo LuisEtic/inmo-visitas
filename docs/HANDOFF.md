@@ -861,11 +861,20 @@ la Fase 3), en Claude Code:
   `docs/deploy/supabase-fase-5.sql` con solo la 0007 (idéntico a la
   migración, comprobado con `diff`). No toca RLS.
 - RLS / Edge Functions activas: las políticas de 0004 sin cambios.
-  `extract` **NO está desplegada** (la despliega Luis: Via Editor con
-  sus dos archivos o CLI; ver `supabase/functions/README.md`) y la
-  0007 **NO está aplicada** (la aplica Luis en el SQL Editor). Los
-  *secrets* `EXTRACT_*` los crea Luis (ver ESTADO.md). Sin
-  `service_role` en el cliente ni en la función.
+  La 0007 **está aplicada** (Luis, SQL Editor, 2026-11-12;
+  columnas y triggers verificados por API) y `extract` **está
+  desplegada** (v6, `verify_jwt: true`; `index.ts` + `rules.ts`).
+  Los *secrets* `EXTRACT_*` existen (verificados por API, solo
+  nombres). **Cambio de modelo 2026-11-12:** `EXTRACT_MODEL` es
+  ahora `gemini-3.5-flash-lite` (puesto por Argo por la Management
+  API), no `gemini-3.8-flash`: 3.8-flash (y 2.5-flash) se cuelgan
+  sin responder en el endpoint OpenAI-compatible de chat (60–133 s,
+  probado desde la VM y desde la función), mientras que 3.5-flash-lite
+  responde en 0,7 s y con el cuerpo exacto de `extract` en 7,7 s.
+  La clave de Gemini se cambió también el 2026-11-12 (nueva clave
+  de AI Studio, puesta por Argo por la Management API): la anterior
+  daba el mismo 502. Sin `service_role` en el cliente ni en la
+  función.
 - Rutas/pantallas nuevas o ampliadas: `/notas/:id` (mismo archivo y
   patrones): botón «Extraer datos» en `transcribed` («Extrayendo…»,
   aviso si se descartan datos sin cita); texto con la cita del dato
@@ -916,29 +925,47 @@ la Fase 3), en Claude Code:
   mandemos los gastos de comunidad e IBI»). Verificado en test:
   `applyExtractionRules` con esos 5 datos y esa nota los conserva a
   los 5 (`rules.test.ts`, «con la nota de ejemplo se quedan los 5
-  datos esperados»); la respuesta real del modelo está pendiente de
-  la prueba en vivo de Luis. La clave no aparece en el repo, en
-  `dist/` ni en la red del navegador: solo los NOMBRES de los
-  *secrets* (`Deno.env.get(…)`), sin valores.
+  datos esperados»). **Respuesta real del modelo verificada por API
+  2026-11-12 (con `gemini-3.5-flash-lite`, 5,2 s):**
+  `{"facts_inserted": 5, "discarded_no_evidence": 0,
+  "discarded_sensitive": 0}`; los 5 datos, todos con cita literal:
+  objeción ruido («Le preocupa el ruido de la calle Alcalá por la
+  noche»), cita_pendiente segunda visita («Quiere volver el viernes,
+  falta confirmar la hora», valor «Viernes, hora por confirmar»),
+  presupuesto 230.000 € declarado, hecho_declarado gastos de
+  comunidad e IBI y hecho_declarado acompañante («Su pareja»). La
+  hora sin confirmar queda recogida dentro del valor de la cita
+  pendiente, no como dato `desconocido` aparte (decisión del modelo,
+  no del código). La clave no aparece en el repo, en `dist/` ni en
+  la red del navegador: solo los NOMBRES de los *secrets*
+  (`Deno.env.get(…)`), sin valores.
 - Supuestos tomados o pendientes:
-  - **BLOQUEADO POR LUIS (0007 sin aplicar):** sin la migración no
-    existen las columnas `origin`/`review_status`/`original_value`/
-    `reviewed_at`/`extracted_at`/`approved_at` ni los triggers; la
-    pantalla pedirá los datos y fallará al leerlos. Desbloqueo:
-    pegar `docs/deploy/supabase-fase-5.sql` en el SQL Editor y
-    comprobar con `select column_name from information_schema.columns
-    where table_name = 'extracted_facts' and column_name in
-    ('origin', 'review_status')` → 2 filas, y `select
-    trigger_name from information_schema.triggers where
-    trigger_name in ('visit_notes_guard',
-    'extracted_facts_guard')` → 2 filas.
-  - **BLOQUEADO POR LUIS (`extract` sin desplegar + *secrets*):**
-    sin la función, «Extraer datos» da 502; sin los *secrets*,
-    también 502 con la nota en `transcribed`. Desbloqueo: crear los
-    *secrets* `EXTRACT_API_URL`, `EXTRACT_MODEL` y
-    `EXTRACT_API_KEY` (valores en ESTADO.md) y desplegar `extract`
-    (Via Editor con `index.ts` + `rules.ts`, o CLI `supabase
-    functions deploy extract`).
+  - **Verificado por API 2026-11-12 (29/29):** `extract` 200 en la
+    nota de ejemplo (2,8–5,2 s; re-extracción también 200 y
+    sustituye los datos propuestos); 5 datos con cita literal
+    (cita del viernes como pendiente, presupuesto como declarado,
+    hora sin confirmar dentro de la cita); `extract` con el JWT de
+    B sobre la nota de A → 404, sin JWT → 401, B no ve los datos
+    de A; en una nota de prueba aparte: aceptar, editar (guarda
+    `original_value`), descartar/recuperar y añadir persisten, la
+    nota pasa a «En revisión»; aprobar con datos propuestos falla
+    con `datos_sin_revisar`; tras revisar todo, aprobar pone
+    `approved_at`; después, cambiar texto/dato o añadir uno falla
+    con `nota_aprobada`; corregir el texto de una nota `extracted`
+    falla con `texto_bloqueado`; borrar la nota aprobada borra sus
+    datos sin error. La nota de prueba se borró tras la verificación;
+    la nota de ejemplo queda en `extracted` con sus 5 datos en
+    «Propuesto» para las pruebas de navegador de Luis.
+  - **Parche 2026-11-12 (etiqueta de inicio):** la pantalla de inicio
+    de la Fase 5 decía «inmo-visitas · Fase 4» (la etiqueta no se
+    actualizó al construir la fase) y el pie decía que la extracción
+    «llega en la Fase 5»; se corrigieron a «Fase 5». No era un
+    problema de caché: la versión publicada era la Fase 5 y la
+    etiqueta mentía.
+  - **Criterio 9 sin verificar:** no se probó el 502 sin
+    `EXTRACT_API_KEY` ni con el proveedor caído (habría que quitar
+    el secret o tumbar el proveedor; la nota seguiría en
+    `transcribed` según el código).
   - **Pendiente de navegador (Luis):** `/notas/:id` completa en la
     nota de ejemplo: «Extraer datos» (los 5 datos con sus citas,
     la del viernes como pendiente y el presupuesto como declarado),
@@ -948,16 +975,6 @@ la Fase 3), en Claude Code:
     con datos «Propuesto» y activo tras revisarlos, solo lectura
     tras aprobar; 360 px sin desbordamiento ni errores de consola,
     en local y en Pages.
-  - **Pendiente en el SQL Editor o por API (Luis, tras la 0007):**
-    criterio 5 (aprobar con datos propuestos falla con
-    `datos_sin_revisar`), criterio 6 (tras aprobar, cambiar texto,
-    dato o añadir uno falla con `nota_aprobada`; borrar la nota
-    aprobada borra también sus datos sin error), criterio 7
-    (corregir el texto de una nota `extracted` falla con
-    `texto_bloqueado`), criterio 8 (`extract` con el JWT de B sobre
-    la nota de A → 404; sin JWT → 401) y criterio 9 (sin
-    `EXTRACT_API_KEY` o con el proveedor caído → 502 y la nota
-    sigue en `transcribed`).
   - `deno check` de `extract` no ejecutado (sin Deno): lo hace
     Claude en la revisión.
   - La copia de `hasEvidence` en `src/features/extraction/evidence.ts`
@@ -965,9 +982,12 @@ la Fase 3), en Claude Code:
     cambia una, hay que cambiar la otra.
 - Cómo probarlo (en vivo contra el proyecto de pruebas, con la nota
   de ejemplo Ana + V-18, id `e0782f7c-8409-4e23-a2b0-5972521fed0a`):
-  - **Primero Luis:** aplicar `docs/deploy/supabase-fase-5.sql` en
-    el SQL Editor; crear los *secrets* `EXTRACT_*`; desplegar
-    `extract` (Via Editor con los dos archivos, o CLI).
+  - **Ya hecho 2026-11-12:** 0007 aplicada en el SQL Editor;
+    *secrets* `EXTRACT_*` creados (`EXTRACT_MODEL` =
+    `gemini-3.5-flash-lite`, `EXTRACT_API_KEY` = clave nueva de AI
+    Studio, puestos por Argo por la Management API); `extract`
+    desplegada (v6). La nota de ejemplo está en `extracted` con
+    sus 5 datos en «Propuesto».
   - Criterio 1 (navegador): en `/notas/e0782f7c-…`, «Extraer datos»
     → al menos los 5 datos de la tabla, cada uno con su cita
     resaltable; la cita del viernes como pendiente y el presupuesto

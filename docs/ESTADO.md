@@ -1,6 +1,6 @@
 # ESTADO — Inmo Visitas (piloto de la skill app-mvp)
-Última actualización: 2026-11-11 (revisión de la Fase 4 y prompt de la Fase 5, en Claude Code)
-Etapa actual: 5 · Bucle por fase   ·   Fase de construcción: 4 de 9 cerrada y revisada · Fase 5 con prompt listo (`docs/prompts/PROMPT-FASE-5.md`), empieza cuando Luis lo pida tras el merge
+Última actualización: 2026-11-12 (Fase 5 verificada por API 29/29; modelo cambiado a gemini-3.5-flash-lite)
+Etapa actual: 5 · Bucle por fase   ·   Fase de construcción: 4 de 9 cerrada y revisada · Fase 5 entregada y verificada por API 29/29, pendiente de revisión de Claude y de pruebas de navegador de Luis
 Constructor: Muse (chat, Git en su espacio → GitHub)   ·   Repo: https://github.com/LuisEtic/inmo-visitas (PÚBLICO, necesario para GitHub Pages gratis)
 Staging actual: https://luisetic.github.io/inmo-visitas/ (rama `gh-pages`, despliegue manual de Muse)   ·   Producción: Hostinger VPS + Coolify
 Entorno de trabajo de Claude: **Claude Code** desde la revisión de la Fase 2. Este archivo (`docs/ESTADO.md` en el repo) es la fuente de verdad; el proyecto de Claude.ai «APP INMO VISITAS» se archiva tras el PR de migración.
@@ -54,7 +54,7 @@ Entorno de trabajo de Claude: **Claude Code** desde la revisión de la Fase 2. E
 | 2 | Acceso / identidad de agentes + RLS por agente | Cerrada: 16/16, enlace mágico verificado en Pages el 11 nov. (commit 5abb997) | v0.2-fase-2 | OK con ajustes (11 nov., Claude Code): migraciones en PostgreSQL 16 por los dos caminos, prueba negativa de RLS, navegador en `/` y `/inmo-visitas/` | #2 (ajustes + migración, fusionado) |
 | 3 | CRUD clientes, inmuebles y contacto | Cerrada: altas de cliente e inmueble por la UI, móvil real y recarga en Pages verificados por Luis (11 nov.); parche de precio/referencia (48e322f) verificado | v0.3-fase-3 | OK con ajustes (11 nov., Claude Code) | #4 |
 | 4 | Captura: voz PWA (audio sí) + texto + transcripción | Cerrada: voz real transcrita en el móvil, micrófono bloqueado y recarga de fichas verificados por Luis en Pages (11 nov.) | v0.4-fase-4 | OK (11 nov., Claude Code): build/tsc/lint/test 61/61, `deno check`, 0001–0006 en PostgreSQL con `auth`/`storage` simulados, prueba negativa de Storage, navegador con micrófono simulado. 2 mejoras menores aplazadas a la Fase 9 | PR de revisión de la Fase 4 |
-| 5 | Extracción con evidencia + revisión/aprobación | Entregada (código, sin commit): /notas/:id con revisión, migración 0007 y Edge Function `extract`. **Pendiente de Luis:** aplicar la 0007 en el SQL Editor, crear los *secrets* `EXTRACT_*` y desplegar `extract` para probar la extracción en vivo; pantallas nuevas pendientes de navegador | v0.5-fase-5 | Pendiente | — |
+| 5 | Extracción con evidencia + revisión/aprobación | Entregada y verificada por API 29/29 (2026-11-12): 0007 aplicada, `extract` desplegada (v6), `extract` 200 en la nota de ejemplo (5 datos con cita literal), revisión/aprobación y reglas verificadas. **Modelo:** `EXTRACT_MODEL` = `gemini-3.5-flash-lite` (3.8-flash se cuelga en el endpoint de chat; clave nueva de AI Studio). **Pendiente de Luis:** pruebas en navegador de `/notas/:id` | v0.5-fase-5 | Pendiente | — |
 | 6 | Borradores duales + bandeja de pendientes (incluye lista de notas guardadas) | Pendiente | — | — | — |
 | 7 | Exportación CRM y WhatsApp | Pendiente | — | — | — |
 | 8 | Seguridad: completar RLS (Storage, Edge Functions), hardening + RGPD | Pendiente | — | — | — |
@@ -72,7 +72,7 @@ Entorno de trabajo de Claude: **Claude Code** desde la revisión de la Fase 2. E
 - `docs/prompts/` con los dos prompts y cabecera actualizada.
 
 ## Pendientes y riesgos abiertos
-- **Fase 5 necesita una clave de Gemini (Luis):** crearla en Google AI Studio y guardar en Supabase → Edge Functions → Secrets `EXTRACT_API_URL` = `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`, `EXTRACT_MODEL` = el modelo Flash vigente que muestre AI Studio (los nombres y el plan gratuito cambian a menudo) y `EXTRACT_API_KEY`. Nunca pasarla a Muse ni pegarla en un chat.
+- **Fase 5 (2026-11-12):** `EXTRACT_API_URL` = `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`, `EXTRACT_MODEL` = `gemini-3.5-flash-lite` (puesto por Argo por la Management API; `gemini-3.8-flash` se cuelga sin responder en el endpoint de chat, probado desde la VM y desde la función), `EXTRACT_API_KEY` = clave nueva de AI Studio (puesta por Argo por la Management API). La clave anterior daba el mismo 502.
 - **RGPD en la Fase 5:** en el plan gratuito, Google puede usar los textos enviados para mejorar sus productos (según sus condiciones de servicios no pagados; comprobar las vigentes, que tratan distinto al EEE). Solo datos ficticios. Antes del piloto con datos reales: plan de pago, DPA y base legal (Fase 8).
 - **Mejoras aplazadas a la Fase 9 (revisión de la Fase 4):** reintento de subida tras fallo parcial (`Capture.tsx`) y URL firmada que se repide tras transcribir (`NoteDetail.tsx`).
 - Clave de transcripción: secrets `TRANSCRIBE_API_URL`, `TRANSCRIBE_MODEL` y `TRANSCRIBE_API_KEY` (Groq) creados por Luis en Supabase → Edge Functions → Secrets, y `transcribe` desplegada y verificada el 2026-11-11. Nunca pasar la clave a Muse ni pegarla en un chat. Revisar en la consola de Groq los límites del plan gratuito.

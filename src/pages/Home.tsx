@@ -52,7 +52,7 @@ export default function Home() {
       <PrivateNav />
       <main className="mx-auto max-w-4xl bg-bg px-4 py-12 text-text-primary">
         <p className="font-mono text-xs text-text-secondary">
-          inmo-visitas · Fase 4
+          inmo-visitas · Fase 5
         </p>
         <h1 className="mt-2 text-2xl">Hola, {displayName ?? fallbackName}</h1>
         <p className="mt-2 text-base text-text-secondary">
@@ -106,8 +106,7 @@ export default function Home() {
         </div>
 
         <p className="mt-6 text-sm text-text-secondary">
-          Fase 4 — Captura por voz y texto + transcripción. La extracción
-          de datos llega en la Fase 5.
+          Fase 5 — Extracción con evidencia + revisión y aprobación.
         </p>
       </main>
     </>
