@@ -2234,3 +2234,38 @@ aplanan en una lista. El contenido es el mismo.)
   los archivos desde GitHub. Orden: token → commit + tag + push
   de Argo → despliegue Via Editor desde `main` (pasos en
   `supabase/functions/README.md`).
+
+### Verificación de `crm-export` por Argo (2026-11-12)
+
+- **`crm-export` v1 ACTIVA** (desplegada por Luis, Via Editor
+  con `index.ts` + `mappers.ts` desde `main`).
+- **Criterio 5 VERIFICADO (simulado):** con nota de sacrificio
+  aprobada: Inmovilla → 200 `enviado`, `external_id: 'SIM-…'`,
+  `simulated: true`, `already_exported: false`; segunda llamada →
+  misma fila con `already_exported: true`; Witei en simulado → 200
+  `enviado`; nota no aprobada → **409
+  `{"error":"Aprueba la nota antes de exportarla."}`**. Payload
+  inspeccionado entero: sin transcripción, citas, audio ni datos
+  descartados; presupuesto como «Presupuesto declarado
+  (declarado): 150.000 euros»; cliente provisional marcado
+  «(provisional)».
+- **Criterio 6 VERIFICADO (webhook con receptor que falla):** con
+  `CRM_WEBHOOK_URL = http://127.0.0.1:9/inmo-test` (puesto y
+  borrado por Argo por la Management API; 201 al crear, 200 al
+  borrar): Witei → **502 `{"error":"El CRM no respondió"}`**,
+  fila `error` con ese mensaje genérico; segunda llamada → 502
+  de nuevo y **fila nueva** (2 filas `error` con distinto id).
+  Sin datos personales en el mensaje.
+- **Criterio 7 VERIFICADO (negativos):** `crm-export` con el JWT
+  de B sobre una nota de A → 404 `{"error":"No encontrado"}`; sin
+  JWT → 401; B no ve (`[]`) ni inserta (`nota_no_aprobada` por
+  RLS) exportaciones de A.
+- **Incidencia de los primeros intentos (no es un defecto del
+  producto):** 4 comprobaciones salieron como «FAIL» en la primera
+  pasada porque el cuerpo de la respuesta llegaba ilegible por la
+  API inestable de hoy (`unreadable`); los códigos de estado eran
+  los correctos. Repetidas leyendo el cuerpo crudo: 409, 502 y
+  payload, todo en verde. La nota de ejemplo sigue intacta (0
+  exportaciones) para la prueba de Luis en el navegador.
+- **Pendiente:** navegador a 360 px (criterios 1, 8 y 10) y
+  despliegue en Pages (falta el token).
