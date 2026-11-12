@@ -1651,3 +1651,33 @@ página; «Generar borrador» llama a `drafts` con `audience:
    por API y comprobar que sale «Hola Ana,» y firma del agente.
 3. **Muse:** desplegar Pages con el cambio de `NoteDetail.tsx`.
 4. Después, Claude cierra la Fase 6 y escribe el prompt de la Fase 7.
+
+### Verificación tras la revisión (Argo, 2026-11-12)
+
+- **PR #10 fusionado (66d23d8)** y traído a local; `drafts` v4
+  ACTIVA (verificado por API, `updated_at` 21:38).
+- **Borrador del comprador regenerado por API con la v4 (audience
+  solo comprador; el del propietario está aprobado): 200 al primer
+  intento, `retries: 0`.** Texto: «Hola Ana, ha sido un placer
+  enseñarte V-18 (Calle de Alcalá 120) junto a tu pareja. Respecto
+  al ruido de la calle Alcalá por la noche, ten en cuenta que el piso
+  cuenta con buenos cerramientos para mitigar el sonido exterior.
+  Para avanzar, sobre la próxima visita pendiente, ¿me confirmas si
+  te va bien el viernes a las 17h o prefieres matizar la hora?
+  Además, te adjunto la información sobre los gastos de comunidad,
+  el IBI y el informe del administrador sobre las cuotas al día de
+  pago que solicitaste. Un abrazo, Agente A Prueba». **Verificado:
+  «Hola Ana,», firma del agente, sin nombrar al propietario, sin
+  presupuesto, hora 17h en los datos y sin confirmarla.**
+  Observación (no bloqueante): «buenos cerramientos para mitigar el
+  sonido exterior» no está en los datos; es una afirmación del modelo
+  sobre el piso que ninguna regla comprueba.
+- **Tests en el código fusionado: 160/160**, `tsc` OK, lint 0
+  errores, build OK en base `/inmo-visitas/` (MD5 local
+  `d0c7de688d7c4cabed070436b7733870`).
+- **Pages NO desplegado: el push a `gh-pages` falló por falta de
+  credenciales** (`could not read Username for 'https://github.com'`;
+  `gh` sin sesión, sin credential helper). Hace falta el token de
+  GitHub de Luis, como en los despliegues anteriores, para subirlo.
+  En vivo sigue la versión anterior (MD5
+  `21ac74e98b392e820870e80662cb8b4d`).
