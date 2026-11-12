@@ -1473,3 +1473,32 @@ acepta por el código, como el criterio 10 de la Fase 5.
   desbordamiento a 360 px y los errores de consola quedan sin
   verificar de momento; primera carga mostró la etiqueta vieja
   «Fase 2» por la caché de la PWA, conocida).
+
+### Re-verificación tras el redespliegue (Argo, 2026-11-12)
+
+- **`drafts` v2 desplegada por Luis ~17:58 (ACTIVA), pero con el
+  CÓDIGO VIEJO: la corrección NO está en el despliegue.** La llamada
+  completa devolvió un borrador del comprador que sigue diciendo
+  «Hola Carlos» y firmando «Ana», con `retries: 0` — la regla nueva
+  (`requiredNames`) lo habría rechazado. Causa probable: al pulsar
+  «Deploy update» el editor tenía abiertos los archivos de la v1 y
+  no se pegaron los nuevos (o la CDN de GitHub sirvió la versión
+  anterior). El código de main SÍ tiene el fix (verificado: las URLs
+  raw devuelven `requiredNames` y la frase de los prompts).
+  **Siguiente paso: Luis vuelve a desplegar pegando de nuevo los
+  dos archivos desde las URLs raw y pulsando «Deploy update».**
+- **Lo que SÍ está verificado (criterios 1 y 6, con la v2):**
+  llamada completa 200 al 8.º intento (7× 502 previos por los 503
+  de Gemini); 3 tareas propuestas, todas `origin: ia`, cada una con
+  su dato de origen correcto (gastos → dato 4, informe → dato 5,
+  cita viernes 17h → dato 1); `tasks_by_rule: 0` (el modelo ya
+  propuso la tarea de la cita, así que la regla no añadió ninguna).
+  Borrador del propietario BUENO en las dos generaciones («Hola
+  Carlos», «Agente A Prueba», sin presupuesto ni nombre de la
+  clienta, cita sin confirmar). Criterio 6 PASS: tarea aceptada
+  sigue `pendiente` tras regenerar el propietario; el borrador del
+  comprador quedó intacto; el del propietario cambió. El borrador
+  malo del comprador se borró; queda solo el bueno del propietario.
+- **Pendiente:** redespliegue con el código nuevo; después,
+  re-verificar solo el borrador del comprador (criterio 1) y probar
+  en el navegador a 360 px las pantallas con sesión.
