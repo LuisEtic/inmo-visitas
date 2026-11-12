@@ -1386,3 +1386,35 @@ acepta por el código, como el criterio 10 de la Fase 5.
 5. Commit «Fase 6: borradores duales + bandeja de pendientes», tag
    `v0.6-fase-6` y push a main (con el token de Luis) + despliegue
    a Pages. No hecho por Muse: no era parte de su tarea.
+
+### Aplicación de la 0009 y verificación del criterio 4 (Argo, 2026-11-12)
+
+- **0009 aplicada por Argo por la Management API** (conector `custom.supabase`,
+  como la 0008): `docs/deploy/supabase-fase-6.sql` ejecutado sin error.
+  Verificado por API: columnas nuevas en `tasks` (`origin` por defecto
+  `agente`, `source_fact_id`, `original_description`, `completed_at`,
+  `updated_at`) y en `drafts` (`status` por defecto `borrador`,
+  `original_content`, `generated_at` por defecto `now()`, `edited_at`,
+  `approved_at`); triggers `tasks_guard` y `drafts_guard` en
+  insert/update/delete; checks (`tasks_status_check` con los 4 estados,
+  único `(visit_note_id, audience)`, filtrado en propietario, longitud
+  1–1500); índice `tasks_agent_status_due_idx`.
+- **Criterio 4 verificado por API: 18/18 PASS** (como agente A, en una nota
+  de prueba creada y aprobada solo para esto, borrada al final por
+  cascada): tarea y borrador en nota no aprobada → `nota_no_aprobada`;
+  editar tarea propuesta guarda `original_description`; transiciones
+  `propuesta → pendiente → completada`, `completada → propuesta` bloqueada
+  con `transicion_no_valida`, `completada` pone `completed_at`, reabrir
+  funciona; editar borrador guarda `original_content`; aprobar borrador y
+  luego editarlo o borrarlo → `borrador_aprobado`; borrar la nota aprobada
+  entera con borradores y tareas **funciona** (cascada RGPD). La nota de
+  ejemplo (Ana + V-18) queda intacta, sin tareas ni borradores.
+- La API de Supabase estaba muy inestable durante la verificación
+  (conexiones cortadas, `RemoteDisconnected`/`IncompleteRead` en lecturas
+  y escrituras): cada operación se reintentó hasta 8 veces y los datos se
+  confirmaron por lectura antes de seguir. Es el mismo patrón de
+  inestabilidad visto con `extract` el 12 nov.
+- **Pendiente:** Luis despliega `drafts` (Via Editor, `index.ts` +
+  `rules.ts`, sin *secrets* nuevos). Después: criterios 1, 6 y 9 por API
+  (borradores y tareas con la nota de ejemplo, «Volver a generar», B → 404,
+  sin JWT → 401) y pruebas en el navegador a 360 px en Pages.
