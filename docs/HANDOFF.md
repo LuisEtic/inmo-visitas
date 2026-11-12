@@ -966,15 +966,18 @@ la Fase 3), en Claude Code:
     `EXTRACT_API_KEY` ni con el proveedor caído (habría que quitar
     el secret o tumbar el proveedor; la nota seguiría en
     `transcribed` según el código).
-  - **Pendiente de navegador (Luis):** `/notas/:id` completa en la
-    nota de ejemplo: «Extraer datos» (los 5 datos con sus citas,
-    la del viernes como pendiente y el presupuesto como declarado),
-    «Ver cita» (resalta y desplaza), aceptar/editar (guarda
-    `original_value`)/descartar/recuperar/añadir con persistencia
-    tras recargar, «Volver a extraer», «Aprobar nota» desactivado
-    con datos «Propuesto» y activo tras revisarlos, solo lectura
-    tras aprobar; 360 px sin desbordamiento ni errores de consola,
-    en local y en Pages.
+  - **Verificado en navegador por Luis 2026-11-12:** nota de ejemplo
+    en `/notas/e0782f7c-…`: 5 datos con citas, viernes como pendiente
+    y presupuesto como declarado; resaltar cita al tocar un dato;
+    aceptar/editar (guarda `original_value`)/descartar/recuperar
+    con persistencia tras recargar; «Añadir dato» (uno añadido por
+    él); «Aprobar nota» aparece solo sin datos «Propuesto» (antes
+    muestra «Revisa todos los datos propuestos antes de aprobar»);
+    nota aprobada («Aprobada el 12 nov 2026, 14:32») y todo en solo
+    lectura. Verificado por API: nota `approved`, 0 propuestos, 6
+    datos revisados (5 de IA + 1 añadido por Luis). Luis apunta
+    pequeñas cosas que pulir, para recopilarlas juntas tras revisar
+    con un posible cliente (no se detallan aquí).
   - `deno check` de `extract` no ejecutado (sin Deno): lo hace
     Claude en la revisión.
   - La copia de `hasEvidence` en `src/features/extraction/evidence.ts`
