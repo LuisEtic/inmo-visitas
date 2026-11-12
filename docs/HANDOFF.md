@@ -1124,3 +1124,36 @@ aprobados por Luis (I-1, I-2 y mejoras 1–5).
   sigue en `transcribed`. Se acepta así.
 - Notas aprobadas antes de la 0008: no cambian (la 0008 no reescribe
   datos).
+
+---
+
+## Despliegue de la revisión de la Fase 5 (Argo, 2026-11-12)
+
+- `git pull origin main` (PR #7 fusionado: `9d374e7`). Verificado en
+  local: `npm test` 94/94, `tsc --noEmit` sin errores, `npm run lint`
+  0 errores (2 avisos previos de shadcn); `docs/deploy/supabase-fase-5-ajustes.sql`
+  idéntico a la migración 0008.
+- **0008 aplicada por Argo por la Management API** (no en el SQL
+  Editor): triggers `visit_notes_guard` (UPDATE) y
+  `visit_notes_insert_guard` (INSERT) verificados en la base.
+  Verificado por API: `transcribed → approved` y alta en `approved`
+  bloqueados con `transicion_no_valida`; `extracted → transcribed`
+  bloqueado con `transicion_no_valida`; nota de ejemplo sigue
+  `approved` y en solo lectura.
+- **`extract` ya redesplegada por Luis (v13)** con el código nuevo:
+  la extracción devuelve 6 datos, incluido el `desconocido`
+  `hora_cita` del nuevo `SYSTEM_PROMPT`.
+- **Extracción lenta/intermitente hoy (2026-11-12):** desde la
+  función, la llamada al proveedor a veces tarda 28 s, a veces
+  cuelga 60 s (502) y a veces falla rápido (502); al reintentar
+  funciona. Desde la VM, el mismo modelo y cuerpo exacto responde
+  en 1,5 s, así que no es el modelo ni la clave: es el camino
+  Supabase → Google (o la API hoy; `gemma` también tardó 35 s en
+  una prueba). La UI tiene reintento («Volver a extraer»).
+- **Pages pendiente de token:** build lista en local con
+  `VITE_BASE_PATH=/inmo-visitas/` y `dist/404.html` copiado; el
+  `git push` a `gh-pages` falló por falta de credenciales (Luis no
+  había pegado el token en este turno). En vivo sigue la build
+  anterior (etiqueta corregida). La cabecera «inmo-visitas · Fase 5»
+  está en el build local (constante `APP_PHASE_LABEL`); queda
+  comprobarla en vivo tras el despliegue.
