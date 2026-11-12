@@ -1527,3 +1527,20 @@ acepta por el código, como el criterio 10 de la Fase 5.
   `/notas`) — la de acceso ya se comprobó; la ventana de pruebas no
   bajó a 360 px exactos ni abrió la consola. Después, revisión de
   Claude (pasarle este HANDOFF).
+
+### Prueba en el navegador a 360 px por Luis (2026-11-12)
+
+- **Luis probó en su móvil las pantallas con sesión: TODO CORRECTO,
+  sin fallos.** Aclaraciones que hicieron falta durante la prueba:
+  la sección «Seguimiento» solo existe en la nota aprobada (Ana +
+  V-18, única aprobada); el botón «Preparar seguimiento» no sale en
+  ella porque ya tiene borradores y tareas (solo sale en aprobadas
+  sin seguimiento, y ahora no hay ninguna); en /pendientes, «Por
+  revisar» y «Seguimiento sin preparar» no aparecen por estar a
+  cero (correcto, se ocultan). Luis aprobó el borrador del
+  propietario durante la prueba (ahora «aprobado»; el del comprador
+  sigue en «borrador»). Estado actual de la nota de ejemplo: 2
+  borradores (1 aprobado), 3 tareas (1 pendiente + 2 propuestas).
+  Datos de prueba nuevos de Luis: 5 notas transcritas más de Ana +
+  V-18 y 2 en borrador (Ana V-18 y David Romero V-12).
+- **Criterio 12 VERIFICADO.** Queda solo la revisión de Claude.
