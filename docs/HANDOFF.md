@@ -1651,3 +1651,23 @@ página; «Generar borrador» llama a `drafts` con `audience:
    por API y comprobar que sale «Hola Ana,» y firma del agente.
 3. **Muse:** desplegar Pages con el cambio de `NoteDetail.tsx`.
 4. Después, Claude cierra la Fase 6 y escribe el prompt de la Fase 7.
+
+### Fusión y despliegue de `drafts` v4 (Claude, 2026-11-12)
+
+- PR #10 fusionado por Claude a petición de Luis (`66d23d8`), tras
+  rebasarlo sobre `c948d68` (nota del criterio 12 de Argo; solo
+  conflicto en docs, conservados los dos bloques).
+- **`drafts` v4 ACTIVA**, desplegada por Claude con el conector de
+  Supabase (proyecto `inmo-visitas-pruebas`), con `index.ts` y
+  `rules.ts` de `main` y `verify_jwt: true` (como la v3). Comprobado
+  descargando la v4: es el código de `main` (`budgetValuesOf`,
+  `hoursIn`, `greetingOf`, `is_temporary`); única diferencia de forma,
+  el espacio duro de `joinThousands` queda como carácter literal en
+  vez de `\u00a0` (equivalente en la expresión regular).
+- Sin prueba en vivo desde la sesión de Claude (la red de su entorno
+  no llega a `supabase.co`).
+- **Pendiente:** Argo regenera por API el borrador del comprador de la
+  nota de ejemplo (el del propietario está aprobado y no se puede
+  regenerar: 409 esperado) y comprueba «Hola Ana,» y la firma del
+  agente; Muse despliega Pages. Después, cierre de la Fase 6 y prompt
+  de la Fase 7.
