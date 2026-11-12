@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
+  budgetValuesOf,
   buyerFacts,
   checkPlaceholders,
   confirmsAppointment,
+  factConfirms,
   fillPlaceholders,
   firstName,
+  hoursIn,
   ownerFacts,
   ownerLeaks,
   parseBuyerResponse,
@@ -60,8 +63,11 @@ function validateOwner(
   raw: string,
   overrides: Partial<PlaceholderValues> = {},
 ) {
+  // Como en `index.ts`: datos del propietario sin presupuesto y los
+  // valores del presupuesto aparte, sacados de TODOS los datos.
   return validateDraft(raw, 'propietario', {
-    facts: FACTS,
+    facts: ownerFacts(FACTS),
+    budgetValues: budgetValuesOf(FACTS),
     clientFullName: 'Ana García',
     placeholders: { ...PLACEHOLDERS, ...overrides },
   })
@@ -72,7 +78,8 @@ function validateBuyer(
   overrides: Partial<PlaceholderValues> = {},
 ) {
   return validateDraft(raw, 'comprador', {
-    facts: FACTS,
+    facts: buyerFacts(FACTS),
+    budgetValues: budgetValuesOf(FACTS),
     clientFullName: 'Ana García',
     placeholders: { ...PLACEHOLDERS, ...overrides },
   })
@@ -514,7 +521,8 @@ const LIVE_PLACEHOLDERS: PlaceholderValues = {
 
 function validateLiveBuyer(raw: string, overrides: Partial<PlaceholderValues> = {}) {
   return validateDraft(raw, 'comprador', {
-    facts: LIVE_FACTS,
+    facts: buyerFacts(LIVE_FACTS),
+    budgetValues: budgetValuesOf(LIVE_FACTS),
     clientFullName: 'Ana García',
     placeholders: { ...LIVE_PLACEHOLDERS, ...overrides },
   })
@@ -522,7 +530,8 @@ function validateLiveBuyer(raw: string, overrides: Partial<PlaceholderValues> = 
 
 function validateLiveOwner(raw: string, overrides: Partial<PlaceholderValues> = {}) {
   return validateDraft(raw, 'propietario', {
-    facts: LIVE_FACTS,
+    facts: ownerFacts(LIVE_FACTS),
+    budgetValues: budgetValuesOf(LIVE_FACTS),
     clientFullName: 'Ana García',
     placeholders: { ...LIVE_PLACEHOLDERS, ...overrides },
   })
@@ -535,7 +544,8 @@ describe('nombres obligatorios (destinatario y firma)', () => {
     )
     expect(result.ok).toBe(false)
     if (!result.ok) {
-      expect(result.reason).toContain('firma')
+      // Desde la revisión, lo para ya el saludo (antes, la firma).
+      expect(result.reason).toContain('saluda al cliente')
     }
   })
 
@@ -580,5 +590,149 @@ describe('nombres obligatorios (destinatario y firma)', () => {
       expect(result.text).toContain('Hola,')
       expect(result.text).toContain('Agente A Prueba')
     }
+  })
+})
+
+describe('ajustes de la revisión de Claude (Fase 6)', () => {
+  // A-1: en producción el propietario recibe `ownerFacts` (sin el dato
+  // de presupuesto); el control del valor usa `budgetValues` aparte.
+  it('budgetValuesOf saca el valor del presupuesto de todos los datos', () => {
+    expect(budgetValuesOf(FACTS)).toEqual(['230.000 euros'])
+    expect(budgetValuesOf(ownerFacts(FACTS))).toEqual([])
+  })
+
+  it('rechaza «230000» y «230.000» sin moneda en el borrador al propietario', () => {
+    for (const figure of ['230000', '230.000', '230 000']) {
+      const result = validateOwner(
+        `Hola {propietario}, la persona interesada habló de ${figure}. Un saludo, {agente}`,
+      )
+      expect(result.ok, figure).toBe(false)
+      if (!result.ok) {
+        expect(result.reason).toContain('presupuesto')
+      }
+    }
+  })
+
+  it('no confunde otras cifras con el presupuesto', () => {
+    const result = validateOwner(
+      'Hola {propietario}, la visita a {inmueble} fue bien y la persona interesada volverá. Un saludo, {agente}',
+      { inmueble: 'V-18 (calle Alcalá 2300)' },
+    )
+    expect(result.ok).toBe(true)
+  })
+
+  // A-2: todas las horas, con todos sus dígitos.
+  it('hoursIn encuentra todas las horas y las normaliza', () => {
+    expect(hoursIn('a las 17h o a las 19:30, o 18.00').map((h) => h.key)).toEqual([
+      '7:30',
+      '6:00',
+      '5:00',
+    ])
+    expect(hoursIn('230.000 euros, V-18, 1.500 €')).toEqual([])
+  })
+
+  it('rechaza «a las 18» y «a las 21h» si el dato dice 17h', () => {
+    for (const hour of ['a las 18', 'a las 21h', 'a las 19:30']) {
+      const result = validateLiveBuyer(
+        `Hola {nombre}, ¿te va bien el viernes ${hour}? Un saludo, {agente}`,
+      )
+      expect(result.ok, hour).toBe(false)
+    }
+  })
+
+  it('rechaza una segunda hora inventada aunque la primera esté en los datos', () => {
+    const result = validateLiveBuyer(
+      'Hola {nombre}, ¿el viernes a las 17h o mejor a las 19h? Un saludo, {agente}',
+    )
+    expect(result.ok).toBe(false)
+  })
+
+  it('acepta la misma hora escrita de otra forma (17h = 17:00)', () => {
+    const result = validateLiveBuyer(
+      'Hola {nombre}, ¿te va bien el viernes a las 17:00? Un saludo, {agente}',
+    )
+    expect(result.ok).toBe(true)
+  })
+
+  // M-2: una negación en el dato no desactiva el control.
+  it('«no confirmada» o «por confirmar» no cuentan como cita confirmada', () => {
+    for (const value of [
+      'Segunda visita el viernes, no confirmada',
+      'Viernes, hora por confirmar',
+      'Visita sin confirmar',
+      'Pendiente de confirmar la visita',
+    ]) {
+      expect(
+        factConfirms({ category: 'cita_pendiente', field_name: 'x', value }),
+        value,
+      ).toBe(false)
+    }
+    expect(
+      factConfirms({
+        category: 'hecho_declarado',
+        field_name: 'x',
+        value: 'Visita del viernes confirmada por la clienta',
+      }),
+    ).toBe(true)
+  })
+
+  it('rechaza «queda confirmada» aunque un dato diga «no confirmada»', () => {
+    const facts: FactInput[] = [
+      {
+        category: 'cita_pendiente',
+        field_name: 'proxima_visita',
+        value: 'Segunda visita el viernes, no confirmada',
+      },
+    ]
+    expect(
+      confirmsAppointment('La visita del viernes queda confirmada.', facts)
+        .confirmed,
+    ).toBe(true)
+  })
+
+  // M-1: el nombre tiene que ir en el saludo, y el del comprador no
+  // nombra al propietario.
+  it('rechaza «Hola Carlos» aunque «Ana» aparezca después', () => {
+    const result = validateBuyer(
+      'Hola Carlos, Ana, te escribo por {inmueble}. ¿Te va bien el viernes? Un saludo, {agente}',
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.reason).toContain('saluda al cliente')
+    }
+  })
+
+  it('rechaza el borrador al comprador que nombra al propietario', () => {
+    const result = validateBuyer(
+      'Hola {nombre}, Carlos, el propietario, te enviará los gastos. Un saludo, {agente}',
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.reason).toContain('propietario')
+    }
+  })
+
+  it('rechaza el borrador al propietario que no le saluda por su nombre', () => {
+    const result = validateOwner(
+      'Buenas tardes, Carlos: la visita a {inmueble} fue bien. Un saludo, {agente}',
+    )
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.reason).toContain('saluda al propietario')
+    }
+  })
+
+  it('sigue aceptando el borrador bueno del comprador de la v3 (datos vivos)', () => {
+    const result = validateLiveBuyer(
+      'Hola {nombre}, gracias por visitar {inmueble} junto a tu pareja. Entiendo lo del ruido de la calle Alcalá por la noche. Te enviaré los gastos de comunidad, el IBI y el informe del administrador. Sobre la segunda visita, te propongo confirmar el viernes a las 17h, pero dime si te va bien esa hora o prefieres otro momento. Un saludo, {agente}',
+    )
+    expect(result.ok).toBe(true)
+  })
+
+  it('acepta un borrador al comprador correcto', () => {
+    const result = validateBuyer(
+      'Hola {nombre}, gracias por visitar {inmueble}. Te enviaré los gastos de comunidad e IBI. ¿Qué hora te va bien el viernes? Un saludo, {agente}',
+    )
+    expect(result.ok).toBe(true)
   })
 })

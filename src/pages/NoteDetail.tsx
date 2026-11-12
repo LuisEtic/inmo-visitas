@@ -147,7 +147,12 @@ function NoteDetailView({ id }: { id: string | undefined }) {
   const [followUpError, setFollowUpError] = useState<string | null>(null)
   const [preparing, setPreparing] = useState(false)
   const [prepareError, setPrepareError] = useState<string | null>(null)
-  const [prepareRulesError, setPrepareRulesError] = useState(false)
+  // Destinatario de la última llamada a `drafts` (undefined = los dos
+  // borradores y las tareas): «Reintentar» repite esa misma llamada, sin
+  // regenerar el otro borrador.
+  const [retryAudience, setRetryAudience] = useState<
+    DraftAudience | undefined
+  >(undefined)
   const [regenerating, setRegenerating] = useState(false)
   const [showRegenConfirm, setShowRegenConfirm] =
     useState<DraftAudience | null>(null)
@@ -548,13 +553,12 @@ function NoteDetailView({ id }: { id: string | undefined }) {
     }
     setPreparing(true)
     setPrepareError(null)
-    setPrepareRulesError(false)
+    setRetryAudience(undefined)
     try {
       await prepareFollowUp(note.id, audience)
       await loadFollowUp(note.id)
     } catch (error: unknown) {
       if (error instanceof DraftsRulesError) {
-        setPrepareRulesError(true)
         setPrepareError(error.message)
         // Aunque un borrador falló, el otro puede haberse guardado.
         await loadFollowUp(note.id)
@@ -576,14 +580,13 @@ function NoteDetailView({ id }: { id: string | undefined }) {
     }
     setRegenerating(true)
     setPrepareError(null)
-    setPrepareRulesError(false)
+    setRetryAudience(audience)
     setShowRegenConfirm(null)
     try {
       await prepareFollowUp(note.id, audience)
       await loadFollowUp(note.id)
     } catch (error: unknown) {
       if (error instanceof DraftsRulesError) {
-        setPrepareRulesError(true)
         setPrepareError(error.message)
         await loadFollowUp(note.id)
       } else {
@@ -813,7 +816,6 @@ function NoteDetailView({ id }: { id: string | undefined }) {
       setDrafts((previous) => [...(previous ?? []), created])
       setShowManualDraft(null)
       setManualDraftContent('')
-      setPrepareRulesError(false)
       setPrepareError(null)
     } catch (error: unknown) {
       setManualDraftError(
@@ -1034,12 +1036,11 @@ function NoteDetailView({ id }: { id: string | undefined }) {
     const showApproveConfirm = draft !== null && showApproveDraftConfirm === draft.id
     const showRegen = showRegenConfirm === audience
 
-    // Sin borrador para este destinatario: solo tras un 422 se puede
-    // escribir a mano («Escribir yo»).
+    // Sin borrador para este destinatario (p. ej. no pasó los controles
+    // y se respondió 422): se puede generar solo ese o escribirlo a mano
+    // («Escribir yo»). No depende de un estado en memoria: tras recargar
+    // la página sigue disponible.
     if (draft === null) {
-      if (!prepareRulesError) {
-        return null
-      }
       return (
         <article
           key={audience}
@@ -1092,18 +1093,31 @@ function NoteDetailView({ id }: { id: string | undefined }) {
               </div>
             </div>
           ) : (
-            <Button
-              variant="secondary"
-              size="lg"
-              className="mt-3"
-              onClick={() => {
-                setShowManualDraft(audience)
-                setManualDraftContent('')
-                setManualDraftError(null)
-              }}
-            >
-              Escribir yo
-            </Button>
+            <>
+              <p className="mt-2 text-sm text-text-secondary">
+                Todavía no hay borrador para este destinatario.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-3">
+                <Button
+                  size="lg"
+                  onClick={() => void handleRegenerate(audience)}
+                  disabled={regenerating || preparing}
+                >
+                  {regenerating ? 'Generando…' : 'Generar borrador'}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  onClick={() => {
+                    setShowManualDraft(audience)
+                    setManualDraftContent('')
+                    setManualDraftError(null)
+                  }}
+                >
+                  Escribir yo
+                </Button>
+              </div>
+            </>
           )}
         </article>
       )
@@ -1969,8 +1983,12 @@ function NoteDetailView({ id }: { id: string | undefined }) {
                           variant="secondary"
                           size="lg"
                           className="mt-3"
-                          onClick={() => void handlePrepare()}
-                          disabled={preparing}
+                          onClick={() =>
+                            void (retryAudience === undefined
+                              ? handlePrepare()
+                              : handleRegenerate(retryAudience))
+                          }
+                          disabled={preparing || regenerating}
                         >
                           Reintentar
                         </Button>

@@ -1,6 +1,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { z } from 'npm:zod@4'
 import {
+  budgetValuesOf,
   buyerFacts,
   firstName,
   ownerFacts,
@@ -187,6 +188,7 @@ async function generateDraft(
   facts: FactInput[],
   placeholders: PlaceholderValues,
   clientFullName: string,
+  budgetValues: string[],
   wantTasks: boolean,
 ): Promise<DraftOutcome> {
   let retries = 0
@@ -203,6 +205,7 @@ async function generateDraft(
       }
       const checked = validateDraft(parsed.data.draft, audience, {
         facts,
+        budgetValues,
         clientFullName,
         placeholders,
       })
@@ -227,6 +230,7 @@ async function generateDraft(
     }
     const checked = validateDraft(parsed.data.draft, audience, {
       facts,
+      budgetValues,
       clientFullName,
       placeholders,
     })
@@ -332,7 +336,7 @@ Deno.serve(async (req: Request) => {
   //    quedan en la función, no se envían al modelo.
   const { data: client, error: clientError } = await supabase
     .from('clients')
-    .select('full_name')
+    .select('full_name, is_temporary')
     .eq('id', note.client_id)
     .maybeSingle()
   const { data: property, error: propertyError } = await supabase
@@ -396,12 +400,15 @@ Deno.serve(async (req: Request) => {
   const userContent = (data: FactInput[]): string =>
     JSON.stringify({ inmueble: property.reference, datos: data })
 
+  // Cliente provisional (`is_temporary`, creado rápido en la captura):
+  // el saludo va sin nombre («Hola,»).
+  const isProvisional = client.is_temporary === true
+  // El valor del presupuesto se comprueba con TODOS los datos: los del
+  // propietario (`ownerData`) ya no lo llevan.
+  const budgetValues = budgetValuesOf(facts)
   const placeholders: PlaceholderValues = {
-    clientFirstName:
-      client.full_name.startsWith('provisional:')
-        ? null
-        : firstName(client.full_name),
-    isProvisional: client.full_name.startsWith('provisional:'),
+    clientFirstName: isProvisional ? null : firstName(client.full_name),
+    isProvisional,
     ownerFirstName: firstName(property.owner_name ?? ''),
     inmueble: `${property.reference} (${property.address ?? ''})`,
     agente: agent.full_name,
@@ -424,6 +431,7 @@ Deno.serve(async (req: Request) => {
             buyerData,
             placeholders,
             client.full_name,
+            budgetValues,
             wantTasks,
           )
         : generateDraft(
@@ -434,6 +442,7 @@ Deno.serve(async (req: Request) => {
             ownerData,
             placeholders,
             client.full_name,
+            budgetValues,
             false,
           ),
     ),
