@@ -4,4 +4,4 @@
  * mano y se quedaban desfasadas (la portada de la Fase 5 decía «Fase 4»).
  * Al cerrar cada fase, se cambia solo aquí.
  */
-export const APP_PHASE_LABEL = 'inmo-visitas · Fase 5'
+export const APP_PHASE_LABEL = 'inmo-visitas · Fase 6'

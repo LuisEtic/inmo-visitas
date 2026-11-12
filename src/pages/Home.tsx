@@ -5,17 +5,20 @@ import { PrivateNav } from '../components/PrivateNav'
 import { SupabaseMissingNotice } from '../components/SupabaseMissingNotice'
 import { useAuth } from '../lib/auth-context'
 import { supabase } from '../lib/supabase'
+import { countPendingTasks } from '../features/tasks/api'
 import { APP_PHASE_LABEL } from '../lib/app-label'
 
 /**
  * / (privada, inicio): saludo al agente y enlaces a las secciones de
- * trabajo: Capturar, Clientes, Inmuebles, Perfil y sistema de diseño.
- * La captura de notas llega en la Fase 4.
+ * trabajo: Capturar, Clientes, Inmuebles, Notas, Pendientes, Perfil y
+ * sistema de diseño. La captura de notas llega en la Fase 4; los
+ * borradores duales y la bandeja de pendientes, en la Fase 6.
  */
 export default function Home() {
   const { user, supabaseConfigured, signOut } = useAuth()
   const navigate = useNavigate()
   const [displayName, setDisplayName] = useState<string | null>(null)
+  const [pendingCount, setPendingCount] = useState(0)
   const [signingOut, setSigningOut] = useState(false)
 
   useEffect(() => {
@@ -31,6 +34,15 @@ export default function Home() {
         if (data !== null) {
           setDisplayName((data as { full_name: string }).full_name)
         }
+      })
+    countPendingTasks()
+      .then((count) => {
+        if (mounted) {
+          setPendingCount(count)
+        }
+      })
+      .catch(() => {
+        // Sin contador no se bloquea la portada.
       })
     return () => {
       mounted = false
@@ -86,6 +98,18 @@ export default function Home() {
             Inmuebles
           </Link>
           <Link
+            to="/notas"
+            className="inline-block min-h-11 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white"
+          >
+            Notas
+          </Link>
+          <Link
+            to="/pendientes"
+            className="inline-block min-h-11 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white"
+          >
+            Pendientes{pendingCount > 0 ? ` (${pendingCount})` : ''}
+          </Link>
+          <Link
             to="/perfil"
             className="inline-block min-h-11 rounded-md border border-border bg-bg px-4 py-2 text-sm font-semibold text-text-primary"
           >
@@ -107,7 +131,7 @@ export default function Home() {
         </div>
 
         <p className="mt-6 text-sm text-text-secondary">
-          Fase 5 — Extracción con evidencia + revisión y aprobación.
+          Fase 6 — Borradores duales + bandeja de pendientes.
         </p>
       </main>
     </>

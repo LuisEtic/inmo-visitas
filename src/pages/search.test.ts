@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { matchesClientQuery, matchesPropertyQuery } from '../lib/search'
+import {
+  matchesClientQuery,
+  matchesNoteQuery,
+  matchesPropertyQuery,
+} from '../lib/search'
 
 const ANA = {
   id: '1',
@@ -54,5 +58,21 @@ describe('matchesPropertyQuery', () => {
   it('no coincide con otros textos', () => {
     expect(matchesPropertyQuery(V07, 'V-18')).toBe(false)
     expect(matchesPropertyQuery(V07, 'Toledo')).toBe(false)
+  })
+})
+
+describe('matchesNoteQuery', () => {
+  const note = { clientName: 'Ana García', propertyReference: 'V-18' }
+
+  it('«garcia» encuentra a «García» y «v-18» a la referencia', () => {
+    expect(matchesNoteQuery(note, 'garcia')).toBe(true)
+    expect(matchesNoteQuery(note, 'GARCÍA')).toBe(true)
+    expect(matchesNoteQuery(note, 'v-18')).toBe(true)
+    expect(matchesNoteQuery(note, 'ana')).toBe(true)
+  })
+
+  it('no coincide con otros textos', () => {
+    expect(matchesNoteQuery(note, 'pedro')).toBe(false)
+    expect(matchesNoteQuery(note, 'V-07')).toBe(false)
   })
 })

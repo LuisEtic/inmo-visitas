@@ -9,11 +9,14 @@ import type { PostgrestError } from '@supabase/supabase-js'
  */
 export function translateDbError(
   error: PostgrestError,
-  context?: { reference?: string },
+  context?: { reference?: string; drafts?: boolean; task?: boolean },
 ): string {
   if (error.code === '23505') {
     if (context?.reference !== undefined) {
       return `Ya tienes un inmueble con la referencia ${context.reference}`
+    }
+    if (context?.drafts === true) {
+      return 'Ya hay un borrador para este destinatario; vuelve a generarlo'
     }
     return 'Ya existe un registro con esos datos.'
   }
@@ -37,10 +40,24 @@ export function translateDbError(
     }
     // Migración 0008 (revisión de la Fase 5).
     if (error.message.includes('transicion_no_valida')) {
-      return 'La nota no puede pasar a ese estado'
+      // El mismo error lo lanzan el guard de notas (0008) y el de
+      // tareas (0009): el texto cambia según la entidad.
+      return context?.task === true
+        ? 'La tarea no puede pasar a ese estado'
+        : 'La nota no puede pasar a ese estado'
     }
     if (error.message.includes('nota_sin_datos')) {
       return 'La nota necesita al menos un dato no descartado para aprobarla'
+    }
+    // Migración 0009 (Fase 6): seguimiento de una nota aprobada.
+    if (error.message.includes('nota_no_aprobada')) {
+      return 'Aprueba la nota antes de preparar el seguimiento'
+    }
+    if (error.message.includes('borrador_aprobado')) {
+      return 'El borrador está aprobado y ya no se puede cambiar'
+    }
+    if (error.message.includes('fuente_no_valida')) {
+      return 'El dato de origen no pertenece a esta nota'
     }
   }
   return 'Ha ocurrido un error. Inténtalo de nuevo.'

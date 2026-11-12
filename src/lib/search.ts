@@ -40,3 +40,23 @@ export function matchesPropertyQuery(property: PropertyRow, query: string): bool
   )
   return haystack.includes(needle)
 }
+
+/**
+ * Coincidencia de la búsqueda de notas (cliente o referencia del
+ * inmueble), sin distinguir mayúsculas ni tildes: «garcia» encuentra
+ * «García». Recibe los dos textos ya resueltos para no importar la
+ * capa de datos desde `lib`.
+ */
+export function matchesNoteQuery(
+  note: { clientName: string; propertyReference: string },
+  query: string,
+): boolean {
+  const needle = normalizeForSearch(query)
+  if (needle === '') {
+    return true
+  }
+  const haystack = normalizeForSearch(
+    [note.clientName, note.propertyReference].join(' '),
+  )
+  return haystack.includes(needle)
+}

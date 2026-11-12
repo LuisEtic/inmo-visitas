@@ -1,8 +1,12 @@
 import { supabase } from '../../lib/supabase'
 import { translateDbError } from '../../lib/db-errors'
+import { matchesNoteQuery } from '../../lib/search'
 import type {
+  ClientRow,
+  PropertyRow,
   VisitNoteInsert,
   VisitNoteRow,
+  VisitNoteStatus,
   VisitNoteUpdate,
 } from '../../lib/database.types'
 
@@ -180,4 +184,97 @@ export async function transcribeNote(noteId: string): Promise<string> {
     throw new Error('No se ha podido transcribir. Inténtalo de nuevo.')
   }
   return transcript
+}
+
+export type NoteWithClientAndProperty = VisitNoteRow & {
+  clients: Pick<ClientRow, 'full_name'> | null
+  properties: Pick<PropertyRow, 'reference'> | null
+}
+
+export type ListNotesOptions = {
+  status?: VisitNoteStatus | 'todas'
+  query?: string
+  /** Posición desde la que devolver notas (paginación de 25 en 25). */
+  offset?: number
+}
+
+export type ListNotesResult = {
+  notes: NoteWithClientAndProperty[]
+  hasMore: boolean
+  total: number
+}
+
+const NOTES_PAGE_SIZE = 25
+
+async function fetchNotesWithClientAndProperty(
+  statuses?: VisitNoteStatus[],
+): Promise<NoteWithClientAndProperty[]> {
+  const client = requireSupabase()
+  let query = client
+    .from('visit_notes')
+    .select('*, clients(full_name), properties(reference)')
+    .order('created_at', { ascending: false })
+  if (statuses !== undefined && statuses.length > 0) {
+    query = query.in('status', statuses)
+  }
+  const { data, error } = await query
+  if (error !== null) {
+    throw new Error(translateDbError(error))
+  }
+  return (data ?? []) as unknown as NoteWithClientAndProperty[]
+}
+
+/**
+ * Lista las notas del agente, las más recientes primero, con cliente
+ * e inmueble. Filtra por estado y busca por cliente o referencia (sin
+ * tildes) en el cliente, como en Clientes e Inmuebles, y pagina de 25
+ * en 25 («Cargar más»).
+ */
+export async function listNotes(
+  options: ListNotesOptions = {},
+): Promise<ListNotesResult> {
+  const { status = 'todas', query = '', offset = 0 } = options
+  const all = await fetchNotesWithClientAndProperty(
+    status === 'todas' ? undefined : [status],
+  )
+  const filtered = all.filter((note) =>
+    matchesNoteQuery(
+      {
+        clientName: note.clients?.full_name ?? '',
+        propertyReference: note.properties?.reference ?? '',
+      },
+      query,
+    ),
+  )
+  return {
+    notes: filtered.slice(offset, offset + NOTES_PAGE_SIZE),
+    hasMore: offset + NOTES_PAGE_SIZE < filtered.length,
+    total: filtered.length,
+  }
+}
+
+/** Notas del agente en unos estados dados (bandeja de pendientes). */
+export async function listNotesByStatus(
+  statuses: VisitNoteStatus[],
+): Promise<NoteWithClientAndProperty[]> {
+  return fetchNotesWithClientAndProperty(statuses)
+}
+
+/** Notas del agente por id, con cliente e inmueble (bandeja de pendientes). */
+export async function getNotesByIds(
+  ids: string[],
+): Promise<NoteWithClientAndProperty[]> {
+  if (ids.length === 0) {
+    return []
+  }
+  const client = requireSupabase()
+  const { data, error } = await client
+    .from('visit_notes')
+    .select('*, clients(full_name), properties(reference)')
+    .in('id', ids)
+    .order('created_at', { ascending: false })
+  if (error !== null) {
+    throw new Error(translateDbError(error))
+  }
+  return (data ?? []) as unknown as NoteWithClientAndProperty[]
 }

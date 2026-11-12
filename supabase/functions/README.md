@@ -155,3 +155,98 @@ curl -X POST https://<proyecto>.supabase.co/functions/v1/extract \
 - Nota sin texto → 400.
 - Proveedor caído o *secret* ausente → 502
   `{ "error": "No se han podido extraer los datos. Inténtalo de nuevo." }`.
+
+## `drafts` (Fase 6)
+
+Prepara el seguimiento de una nota aprobada: un borrador para el
+comprador, otro para el propietario y las tareas propuestas, con un
+modelo de lenguaje por la API de chat compatible con OpenAI. Guarda
+los borradores en `drafts` (estado `borrador`) y las tareas en `tasks`
+(estado `propuesta`, `origin` `ia` o `regla`).
+
+- Entrada: `POST` con cuerpo JSON `{ "visit_note_id": "<uuid>" }` (los
+  dos borradores y las tareas) o `{ "visit_note_id": "<uuid>",
+  "audience": "comprador" | "propietario" }` (solo regenerar ese
+  borrador, «Volver a generar»).
+- Autenticación: Supabase verifica el JWT por defecto. Dentro, la
+  función crea el cliente con la clave anon y la cabecera
+  `Authorization` de la petición: todas las lecturas y escrituras
+  pasan por RLS como ese agente. **Nunca `service_role`.**
+- Al modelo solo se envían la categoría, el nombre y el valor de los
+  datos no descartados, más la referencia del inmueble. Ni nombres,
+  ni teléfonos, ni la dirección, ni el precio. El borrador al
+  propietario sale de una llamada aparte SIN presupuesto ni finanzas
+  (`ownerFacts` en `rules.ts`). Las reglas mandan sobre la IA: el
+  borrador al propietario nunca filtra presupuesto ni el nombre del
+  cliente, ningún borrador da por confirmada una cita ni inventa una
+  hora, y cada cita pendiente tiene su tarea de confirmar (la añade la
+  regla si la IA no la propuso). Un borrador rechazado se reintenta
+  UNA vez; si vuelve a fallar → 422 y ese borrador no se guarda (el
+  otro, si pasó, sí se guarda).
+- Proveedor configurable por *secrets*, con fallback a los de
+  `extract` si falta alguno (no hay *secrets* nuevos que crear):
+  - `DRAFT_API_URL` → `EXTRACT_API_URL`
+  - `DRAFT_MODEL` → `EXTRACT_MODEL`
+  - `DRAFT_API_KEY` → `EXTRACT_API_KEY`
+  En pruebas: la API compatible con OpenAI de Gemini y el modelo
+  Flash vigente (`gemini-3.5-flash-lite`, puesto en `EXTRACT_MODEL`
+  en la Fase 5).
+- Solo admite notas en `approved` (cualquier otro estado → 409
+  `{ "error": "Aprueba la nota antes de preparar el seguimiento" }`). Si el borrador pedido
+  ya está aprobado → 409 `{ "error": "El borrador ya está aprobado" }`.
+  Sin datos no descartados → 400.
+- Si falta algún *secret*, el proveedor falla o el JSON no es válido,
+  responde 502 con el mensaje en español y no se escribe nada. La
+  clave, los datos, los borradores y la respuesta del modelo nunca
+  aparecen en los logs ni en las respuestas de error.
+- Respuesta 200: `{ "drafts": ["comprador", "propietario"],
+  "tasks_proposed": n, "tasks_by_rule": n, "retries": n }`.
+
+### Desplegar sin CLI (la vía de este proyecto)
+
+La función tiene **dos archivos** (`index.ts` y `rules.ts`): hay que
+subir los dos, con `index.ts` como archivo principal.
+
+1. Supabase → Edge Functions → **Deploy a new function** →
+   **Via Editor**.
+2. Nombre de la función: `drafts`.
+3. Pegar el contenido completo de `supabase/functions/drafts/index.ts`
+   como `index.ts`.
+4. Añadir un archivo `rules.ts` en la misma función y pegar el
+   contenido completo de `supabase/functions/drafts/rules.ts`
+   (`index.ts` lo importa como `./rules.ts`).
+5. No hay que crear *secrets*: usa los `EXTRACT_*` que ya existen
+   (salvo que se quiera un proveedor distinto, en cuyo caso se crean
+   los `DRAFT_*`).
+6. Deploy. La función queda en
+   `https://<proyecto>.supabase.co/functions/v1/drafts`.
+
+### Desplegar con CLI
+
+```bash
+supabase functions deploy drafts
+```
+
+(La CLI sube la carpeta completa, con los dos archivos.)
+
+### Comprobar que responde
+
+Con el JWT de un agente (la función exige autenticación):
+
+```bash
+curl -X POST https://<proyecto>.supabase.co/functions/v1/drafts \
+  -H "Authorization: Bearer <jwt-del-agente>" \
+  -H "Content-Type: application/json" \
+  -d '{"visit_note_id": "<uuid-de-una-nota-aprobada>"}'
+```
+
+- Nota de otro agente → 404 `{ "error": "No encontrado" }`.
+- Sin JWT → 401.
+- Nota no aprobada → 409 `{ "error": "Aprueba la nota antes de preparar el seguimiento" }`.
+- Borrador ya aprobado → 409
+  `{ "error": "El borrador ya está aprobado" }`.
+- Proveedor caído o *secret* ausente → 502
+  `{ "error": "No se ha podido preparar el seguimiento. Inténtalo de nuevo." }`.
+- Borrador que no pasa los controles dos veces → 422
+  `{ "error": "El borrador no ha pasado los controles. Vuelve a generarlo o escríbelo tú." }`
+  (el otro borrador, si pasó, sí queda guardado).

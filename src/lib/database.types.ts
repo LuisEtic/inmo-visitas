@@ -174,6 +174,88 @@ export type ExtractedFactUpdate = {
   reviewed_at?: string | null
 }
 
+export type TaskStatus = 'propuesta' | 'pendiente' | 'completada' | 'descartada'
+
+export type TaskOrigin = 'ia' | 'regla' | 'agente'
+
+/**
+ * Tarea de seguimiento (Fase 6). Columnas de 0001 más las de 0009:
+ * `origin` (quién la propuso), `source_fact_id` (el dato que la
+ * justifica), `original_description` (descripción anterior a la
+ * primera edición, para medir correcciones), `completed_at` y
+ * `updated_at`. Una tarea a mano (`agente`) nace `pendiente` y puede
+ * no tener nota (`visit_note_id` null).
+ */
+export type TaskRow = {
+  id: string
+  visit_note_id: string | null
+  agent_id: string | null
+  description: string
+  due_date: string | null
+  status: TaskStatus
+  origin: TaskOrigin
+  source_fact_id: string | null
+  original_description: string | null
+  completed_at: string | null
+  updated_at: string | null
+  created_at: string
+}
+
+export type TaskInsert = {
+  visit_note_id?: string | null
+  description: string
+  due_date?: string | null
+  status?: TaskStatus
+  origin?: TaskOrigin
+  source_fact_id?: string | null
+}
+
+export type TaskUpdate = {
+  description?: string
+  due_date?: string | null
+  status?: TaskStatus
+  source_fact_id?: string | null
+}
+
+export type DraftAudience = 'comprador' | 'propietario'
+
+export type DraftStatus = 'borrador' | 'aprobado'
+
+/**
+ * Borrador de seguimiento (Fase 6). Columnas de 0001 más las de 0009:
+ * `status` (`borrador` o `aprobado`, congelado), `original_content`
+ * (texto de la IA antes de la primera edición),
+ * `generated_at`/`edited_at`/`approved_at`. Un borrador por nota y
+ * destinatario. El del propietario solo existe filtrado
+ * (`is_sensitive_filtered`).
+ */
+export type DraftRow = {
+  id: string
+  visit_note_id: string
+  audience: DraftAudience
+  content: string
+  is_sensitive_filtered: boolean
+  status: DraftStatus
+  original_content: string | null
+  generated_at: string
+  edited_at: string | null
+  approved_at: string | null
+  created_at: string
+}
+
+export type DraftInsert = {
+  visit_note_id: string
+  audience: DraftAudience
+  content: string
+  is_sensitive_filtered?: boolean
+  status?: DraftStatus
+}
+
+export type DraftUpdate = {
+  content?: string
+  status?: DraftStatus
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -207,13 +289,71 @@ export interface Database {
         Row: VisitNoteRow
         Insert: VisitNoteInsert
         Update: VisitNoteUpdate
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: 'visit_notes_client_id_fkey'
+            columns: ['client_id']
+            isOneToOne: false
+            referencedRelation: 'clients'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'visit_notes_property_id_fkey'
+            columns: ['property_id']
+            isOneToOne: false
+            referencedRelation: 'properties'
+            referencedColumns: ['id']
+          },
+        ]
       }
       extracted_facts: {
         Row: ExtractedFactRow
         Insert: ExtractedFactInsert
         Update: ExtractedFactUpdate
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: 'extracted_facts_visit_note_id_fkey'
+            columns: ['visit_note_id']
+            isOneToOne: false
+            referencedRelation: 'visit_notes'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      tasks: {
+        Row: TaskRow
+        Insert: TaskInsert
+        Update: TaskUpdate
+        Relationships: [
+          {
+            foreignKeyName: 'tasks_visit_note_id_fkey'
+            columns: ['visit_note_id']
+            isOneToOne: false
+            referencedRelation: 'visit_notes'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'tasks_source_fact_id_fkey'
+            columns: ['source_fact_id']
+            isOneToOne: false
+            referencedRelation: 'extracted_facts'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      drafts: {
+        Row: DraftRow
+        Insert: DraftInsert
+        Update: DraftUpdate
+        Relationships: [
+          {
+            foreignKeyName: 'drafts_visit_note_id_fkey'
+            columns: ['visit_note_id']
+            isOneToOne: false
+            referencedRelation: 'visit_notes'
+            referencedColumns: ['id']
+          },
+        ]
       }
     }
     Views: Record<string, never>

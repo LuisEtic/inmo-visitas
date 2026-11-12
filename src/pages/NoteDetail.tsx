@@ -17,6 +17,21 @@ import {
   reviewFact,
   type ReviewAction,
 } from '../features/extraction/api'
+import {
+  approveDraft,
+  createManualDraft,
+  createTask,
+  acceptTask,
+  discardTask,
+  DraftsRulesError,
+  editTask,
+  listDrafts,
+  listNoteTasks,
+  prepareFollowUp,
+  restoreTask,
+  saveDraft,
+} from '../features/followup/api'
+import { listSourceFacts } from '../features/tasks/api'
 import { findEvidenceRange, hasEvidence } from '../features/extraction/evidence'
 import {
   CATEGORY_ORDER,
@@ -36,9 +51,12 @@ import {
 import { formatPhone } from '../lib/contact'
 import type {
   ClientRow,
+  DraftAudience,
+  DraftRow,
   ExtractedFactRow,
   FactCategory,
   PropertyRow,
+  TaskRow,
   VisitNoteRow,
 } from '../lib/database.types'
 import { useAuth } from '../lib/auth-context'
@@ -120,6 +138,70 @@ function NoteDetailView({ id }: { id: string | undefined }) {
   const [approveError, setApproveError] = useState<string | null>(null)
   const markRef = useRef<HTMLElement | null>(null)
 
+  // Seguimiento (Fase 6): borradores duales y tareas, solo nota aprobada.
+  const [drafts, setDrafts] = useState<DraftRow[] | null>(null)
+  const [noteTasks, setNoteTasks] = useState<TaskRow[] | null>(null)
+  const [sourceFacts, setSourceFacts] = useState<Map<string, ExtractedFactRow>>(
+    new Map(),
+  )
+  const [followUpError, setFollowUpError] = useState<string | null>(null)
+  const [preparing, setPreparing] = useState(false)
+  const [prepareError, setPrepareError] = useState<string | null>(null)
+  const [prepareRulesError, setPrepareRulesError] = useState(false)
+  const [regenerating, setRegenerating] = useState(false)
+  const [showRegenConfirm, setShowRegenConfirm] =
+    useState<DraftAudience | null>(null)
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null)
+  const [editDraftContent, setEditDraftContent] = useState('')
+  const [draftEditError, setDraftEditError] = useState<string | null>(null)
+  const [savingDraft, setSavingDraft] = useState(false)
+  const [copyNotice, setCopyNotice] = useState<string | null>(null)
+  const [showApproveDraftConfirm, setShowApproveDraftConfirm] = useState<
+    string | null
+  >(null)
+  const [approvingDraft, setApprovingDraft] = useState(false)
+  const [showManualDraft, setShowManualDraft] =
+    useState<DraftAudience | null>(null)
+  const [manualDraftContent, setManualDraftContent] = useState('')
+  const [manualDraftError, setManualDraftError] = useState<string | null>(null)
+  const [savingManualDraft, setSavingManualDraft] = useState(false)
+  const [acceptingTaskId, setAcceptingTaskId] = useState<string | null>(null)
+  const [acceptDueDate, setAcceptDueDate] = useState('')
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
+  const [editTaskDescription, setEditTaskDescription] = useState('')
+  const [editTaskDueDate, setEditTaskDueDate] = useState('')
+  const [taskEditError, setTaskEditError] = useState<string | null>(null)
+  const [savingTask, setSavingTask] = useState(false)
+  const [taskActionError, setTaskActionError] = useState<string | null>(null)
+  const [showDiscardedTasks, setShowDiscardedTasks] = useState(false)
+  const [showAddTask, setShowAddTask] = useState(false)
+  const [newTaskDescription, setNewTaskDescription] = useState('')
+  const [newTaskDueDate, setNewTaskDueDate] = useState('')
+  const [addTaskError, setAddTaskError] = useState<string | null>(null)
+  const [addingTask, setAddingTask] = useState(false)
+
+  async function loadFollowUp(noteId: string) {
+    try {
+      const [draftRows, taskRows] = await Promise.all([
+        listDrafts(noteId),
+        listNoteTasks(noteId),
+      ])
+      setDrafts(draftRows)
+      setNoteTasks(taskRows)
+      const factIds = taskRows
+        .map((task) => task.source_fact_id)
+        .filter((factId): factId is string => factId !== null)
+      const factRows = await listSourceFacts(factIds)
+      setSourceFacts(new Map(factRows.map((fact) => [fact.id, fact])))
+    } catch (error: unknown) {
+      setFollowUpError(
+        error instanceof Error
+          ? error.message
+          : 'No se ha podido cargar el seguimiento.',
+      )
+    }
+  }
+
   useEffect(() => {
     if (!supabaseConfigured || id === undefined) {
       return
@@ -156,6 +238,9 @@ function NoteDetailView({ id }: { id: string | undefined }) {
                 : 'No se han podido cargar los datos.',
             )
           })
+        if (row.status === 'approved') {
+          void loadFollowUp(row.id)
+        }
       })
       .catch((error: unknown) => {
         if (!mounted) return
@@ -445,12 +530,297 @@ function NoteDetailView({ id }: { id: string | undefined }) {
             },
       )
       setShowApproveConfirm(false)
+      void loadFollowUp(note.id)
     } catch (error: unknown) {
       setApproveError(
         error instanceof Error ? error.message : 'No se ha podido aprobar la nota.',
       )
     } finally {
       setApproving(false)
+    }
+  }
+
+  // --- Seguimiento (Fase 6) ---
+
+  async function handlePrepare(audience?: DraftAudience) {
+    if (note === null) {
+      return
+    }
+    setPreparing(true)
+    setPrepareError(null)
+    setPrepareRulesError(false)
+    try {
+      await prepareFollowUp(note.id, audience)
+      await loadFollowUp(note.id)
+    } catch (error: unknown) {
+      if (error instanceof DraftsRulesError) {
+        setPrepareRulesError(true)
+        setPrepareError(error.message)
+        // Aunque un borrador falló, el otro puede haberse guardado.
+        await loadFollowUp(note.id)
+      } else {
+        setPrepareError(
+          error instanceof Error
+            ? error.message
+            : 'No se ha podido preparar el seguimiento. Inténtalo de nuevo.',
+        )
+      }
+    } finally {
+      setPreparing(false)
+    }
+  }
+
+  async function handleRegenerate(audience: DraftAudience) {
+    if (note === null) {
+      return
+    }
+    setRegenerating(true)
+    setPrepareError(null)
+    setPrepareRulesError(false)
+    setShowRegenConfirm(null)
+    try {
+      await prepareFollowUp(note.id, audience)
+      await loadFollowUp(note.id)
+    } catch (error: unknown) {
+      if (error instanceof DraftsRulesError) {
+        setPrepareRulesError(true)
+        setPrepareError(error.message)
+        await loadFollowUp(note.id)
+      } else {
+        setPrepareError(
+          error instanceof Error
+            ? error.message
+            : 'No se ha podido preparar el seguimiento. Inténtalo de nuevo.',
+        )
+      }
+    } finally {
+      setRegenerating(false)
+    }
+  }
+
+  function updateTaskInList(updated: TaskRow) {
+    setNoteTasks((previous) =>
+      previous === null
+        ? previous
+        : previous.map((task) => (task.id === updated.id ? updated : task)),
+    )
+  }
+
+  async function handleAcceptTask(task: TaskRow) {
+    setTaskActionError(null)
+    setSavingTask(true)
+    try {
+      const updated = await acceptTask(
+        task.id,
+        acceptDueDate === '' ? null : acceptDueDate,
+      )
+      updateTaskInList(updated)
+      setAcceptingTaskId(null)
+      setAcceptDueDate('')
+    } catch (error: unknown) {
+      setTaskActionError(
+        error instanceof Error ? error.message : 'No se ha podido añadir la tarea.',
+      )
+    } finally {
+      setSavingTask(false)
+    }
+  }
+
+  async function handleDiscardTask(task: TaskRow) {
+    setTaskActionError(null)
+    setSavingTask(true)
+    try {
+      updateTaskInList(await discardTask(task.id))
+    } catch (error: unknown) {
+      setTaskActionError(
+        error instanceof Error ? error.message : 'No se ha podido descartar la tarea.',
+      )
+    } finally {
+      setSavingTask(false)
+    }
+  }
+
+  async function handleRestoreTask(task: TaskRow) {
+    setTaskActionError(null)
+    setSavingTask(true)
+    try {
+      updateTaskInList(await restoreTask(task.id))
+    } catch (error: unknown) {
+      setTaskActionError(
+        error instanceof Error ? error.message : 'No se ha podido recuperar la tarea.',
+      )
+    } finally {
+      setSavingTask(false)
+    }
+  }
+
+  function handleStartEditTask(task: TaskRow) {
+    setEditingTaskId(task.id)
+    setEditTaskDescription(task.description)
+    setEditTaskDueDate(task.due_date ?? '')
+    setTaskEditError(null)
+    setTaskActionError(null)
+  }
+
+  async function handleSaveEditTask(id: string) {
+    const description = editTaskDescription.trim()
+    if (description.length < 3 || description.length > 200) {
+      setTaskEditError('La descripción tiene que tener entre 3 y 200 caracteres.')
+      return
+    }
+    setTaskEditError(null)
+    setSavingTask(true)
+    try {
+      updateTaskInList(
+        await editTask(id, {
+          description,
+          due_date: editTaskDueDate === '' ? null : editTaskDueDate,
+        }),
+      )
+      setEditingTaskId(null)
+    } catch (error: unknown) {
+      setTaskEditError(
+        error instanceof Error ? error.message : 'No se ha podido editar la tarea.',
+      )
+    } finally {
+      setSavingTask(false)
+    }
+  }
+
+  async function handleAddTask() {
+    if (note === null) {
+      return
+    }
+    const description = newTaskDescription.trim()
+    if (description.length < 3 || description.length > 200) {
+      setAddTaskError('La descripción tiene que tener entre 3 y 200 caracteres.')
+      return
+    }
+    setAddTaskError(null)
+    setAddingTask(true)
+    try {
+      const created = await createTask({
+        visit_note_id: note.id,
+        description,
+        due_date: newTaskDueDate === '' ? null : newTaskDueDate,
+      })
+      setNoteTasks((previous) => [...(previous ?? []), created])
+      setShowAddTask(false)
+      setNewTaskDescription('')
+      setNewTaskDueDate('')
+    } catch (error: unknown) {
+      setAddTaskError(
+        error instanceof Error ? error.message : 'No se ha podido añadir la tarea.',
+      )
+    } finally {
+      setAddingTask(false)
+    }
+  }
+
+  function handleStartEditDraft(draft: DraftRow) {
+    setEditingDraftId(draft.id)
+    setEditDraftContent(draft.content)
+    setDraftEditError(null)
+    setCopyNotice(null)
+  }
+
+  async function handleSaveDraft(id: string) {
+    const content = editDraftContent.trim()
+    if (content.length < 1 || content.length > 1500) {
+      setDraftEditError('El borrador tiene que tener entre 1 y 1.500 caracteres.')
+      return
+    }
+    setDraftEditError(null)
+    setSavingDraft(true)
+    try {
+      const updated = await saveDraft(id, content)
+      setDrafts((previous) =>
+        previous === null
+          ? previous
+          : previous.map((draft) => (draft.id === id ? updated : draft)),
+      )
+      setEditingDraftId(null)
+    } catch (error: unknown) {
+      setDraftEditError(
+        error instanceof Error ? error.message : 'No se ha podido guardar el borrador.',
+      )
+    } finally {
+      setSavingDraft(false)
+    }
+  }
+
+  async function handleCopyDraft(draft: DraftRow) {
+    try {
+      await navigator.clipboard.writeText(draft.content)
+      setCopyNotice(draft.id)
+    } catch {
+      // Sin permiso de portapapeles: selecciona el texto para copiarlo a mano.
+      const textarea = document.getElementById(
+        `borrador-${draft.id}`,
+      ) as HTMLTextAreaElement | null
+      if (textarea !== null) {
+        textarea.focus()
+        textarea.select()
+        setCopyNotice(draft.id)
+        return
+      }
+      const textElement = document.getElementById(`borrador-texto-${draft.id}`)
+      if (textElement !== null) {
+        const range = document.createRange()
+        range.selectNodeContents(textElement)
+        const selection = window.getSelection()
+        selection?.removeAllRanges()
+        selection?.addRange(range)
+        setCopyNotice(draft.id)
+      }
+    }
+  }
+
+  async function handleApproveDraft(draft: DraftRow) {
+    setApprovingDraft(true)
+    setDraftEditError(null)
+    try {
+      const updated = await approveDraft(draft.id)
+      setDrafts((previous) =>
+        previous === null
+          ? previous
+          : previous.map((item) => (item.id === draft.id ? updated : item)),
+      )
+      setShowApproveDraftConfirm(null)
+      setEditingDraftId(null)
+    } catch (error: unknown) {
+      setDraftEditError(
+        error instanceof Error ? error.message : 'No se ha podido aprobar el borrador.',
+      )
+    } finally {
+      setApprovingDraft(false)
+    }
+  }
+
+  async function handleManualDraft(audience: DraftAudience) {
+    if (note === null) {
+      return
+    }
+    const content = manualDraftContent.trim()
+    if (content.length < 1 || content.length > 1500) {
+      setManualDraftError('El borrador tiene que tener entre 1 y 1.500 caracteres.')
+      return
+    }
+    setManualDraftError(null)
+    setSavingManualDraft(true)
+    try {
+      const created = await createManualDraft(note.id, audience, content)
+      setDrafts((previous) => [...(previous ?? []), created])
+      setShowManualDraft(null)
+      setManualDraftContent('')
+      setPrepareRulesError(false)
+      setPrepareError(null)
+    } catch (error: unknown) {
+      setManualDraftError(
+        error instanceof Error ? error.message : 'No se ha podido guardar el borrador.',
+      )
+    } finally {
+      setSavingManualDraft(false)
     }
   }
 
@@ -488,6 +858,29 @@ function NoteDetailView({ id }: { id: string | undefined }) {
     factsList.length > 0 &&
     proposedCount === 0 &&
     factsList.some((fact) => fact.review_status !== 'descartado')
+
+  // Seguimiento (Fase 6): solo hay borradores y tareas en notas aprobadas.
+  const tasksList = noteTasks ?? []
+  const proposedTasks = tasksList.filter((task) => task.status === 'propuesta')
+  const acceptedTasks = tasksList.filter(
+    (task) => task.status === 'pendiente' || task.status === 'completada',
+  )
+  const discardedTasks = tasksList.filter(
+    (task) => task.status === 'descartada',
+  )
+  const manualTasks = tasksList.filter((task) => task.origin === 'agente')
+  const draftsList = drafts ?? []
+  const buyerDraft =
+    draftsList.find((draft) => draft.audience === 'comprador') ?? null
+  const ownerDraft =
+    draftsList.find((draft) => draft.audience === 'propietario') ?? null
+  const editedDrafts = draftsList.filter(
+    (draft) => draft.original_content !== null,
+  )
+  const approvedDrafts = draftsList.filter(
+    (draft) => draft.status === 'aprobado',
+  )
+  const hasFollowUp = draftsList.length > 0 || tasksList.length > 0
 
   const selectedFact =
     factsList.find((fact) => fact.id === selectedFactId) ?? null
@@ -627,6 +1020,426 @@ function NoteDetailView({ id }: { id: string | undefined }) {
                 Recuperar
               </Button>
             )}
+          </div>
+        )}
+      </article>
+    )
+  }
+
+  function renderDraftCard(audience: DraftAudience, draft: DraftRow | null) {
+    const title =
+      audience === 'comprador' ? 'Para el comprador' : 'Para el propietario'
+    const isOwner = audience === 'propietario'
+    const isEditing = draft !== null && editingDraftId === draft.id
+    const showApproveConfirm = draft !== null && showApproveDraftConfirm === draft.id
+    const showRegen = showRegenConfirm === audience
+
+    // Sin borrador para este destinatario: solo tras un 422 se puede
+    // escribir a mano («Escribir yo»).
+    if (draft === null) {
+      if (!prepareRulesError) {
+        return null
+      }
+      return (
+        <article
+          key={audience}
+          className="rounded-md border border-border px-4 py-3"
+        >
+          <h4 className="font-semibold">{title}</h4>
+          {isOwner && (
+            <p className="mt-1 text-sm text-text-secondary">
+              Sin presupuesto ni datos económicos del comprador
+            </p>
+          )}
+          {showManualDraft === audience ? (
+            <div className="mt-3">
+              <Label htmlFor={`borrador-manual-${audience}`}>Borrador</Label>
+              <textarea
+                id={`borrador-manual-${audience}`}
+                value={manualDraftContent}
+                onChange={(event) => {
+                  setManualDraftContent(event.target.value)
+                  setManualDraftError(null)
+                }}
+                rows={6}
+                maxLength={1500}
+                className="mt-1 min-h-11 w-full rounded-md border border-border bg-bg px-3 py-2 text-base text-text-primary placeholder:text-text-secondary focus-visible:outline-2 focus-visible:outline-info"
+              />
+              <p className="mt-1 text-right font-mono text-xs text-text-secondary">
+                {manualDraftContent.length} / 1.500
+              </p>
+              {manualDraftError !== null && (
+                <p className="mt-1 text-sm text-error">{manualDraftError}</p>
+              )}
+              <div className="mt-3 flex flex-wrap gap-3">
+                <Button
+                  size="lg"
+                  onClick={() => void handleManualDraft(audience)}
+                  disabled={savingManualDraft}
+                >
+                  {savingManualDraft ? 'Guardando…' : 'Guardar borrador'}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  onClick={() => {
+                    setShowManualDraft(null)
+                    setManualDraftError(null)
+                  }}
+                >
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button
+              variant="secondary"
+              size="lg"
+              className="mt-3"
+              onClick={() => {
+                setShowManualDraft(audience)
+                setManualDraftContent('')
+                setManualDraftError(null)
+              }}
+            >
+              Escribir yo
+            </Button>
+          )}
+        </article>
+      )
+    }
+
+    const isApproved = draft.status === 'aprobado'
+    return (
+      <article
+        key={draft.id}
+        className="rounded-md border border-border px-4 py-3"
+      >
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h4 className="font-semibold">{title}</h4>
+          <div className="flex flex-wrap gap-2">
+            {draft.original_content !== null && (
+              <Badge variant="neutral">Editado por ti</Badge>
+            )}
+            {isApproved && <Badge variant="neutral">Aprobado</Badge>}
+          </div>
+        </div>
+        {isOwner && (
+          <p className="mt-1 text-sm text-text-secondary">
+            Sin presupuesto ni datos económicos del comprador
+          </p>
+        )}
+        {isApproved ? (
+          <p
+            id={`borrador-texto-${draft.id}`}
+            className="mt-2 whitespace-pre-wrap break-words text-base"
+          >
+            {draft.content}
+          </p>
+        ) : isEditing ? (
+          <div className="mt-3">
+            <Label htmlFor={`borrador-${draft.id}`}>Borrador</Label>
+            <textarea
+              id={`borrador-${draft.id}`}
+              value={editDraftContent}
+              onChange={(event) => {
+                setEditDraftContent(event.target.value)
+                setDraftEditError(null)
+              }}
+              rows={6}
+              maxLength={1500}
+              className="mt-1 min-h-11 w-full rounded-md border border-border bg-bg px-3 py-2 text-base text-text-primary placeholder:text-text-secondary focus-visible:outline-2 focus-visible:outline-info"
+            />
+            <p className="mt-1 text-right font-mono text-xs text-text-secondary">
+              {editDraftContent.length} / 1.500
+            </p>
+            {draftEditError !== null && (
+              <p className="mt-1 text-sm text-error">{draftEditError}</p>
+            )}
+            <div className="mt-3 flex flex-wrap gap-3">
+              <Button
+                size="lg"
+                onClick={() => void handleSaveDraft(draft.id)}
+                disabled={savingDraft}
+              >
+                {savingDraft ? 'Guardando…' : 'Guardar cambios'}
+              </Button>
+              <Button
+                variant="secondary"
+                size="lg"
+                onClick={() => {
+                  setEditingDraftId(null)
+                  setDraftEditError(null)
+                }}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <p className="mt-2 whitespace-pre-wrap break-words text-base">
+              {draft.content}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                size="lg"
+                onClick={() => handleStartEditDraft(draft)}
+              >
+                Editar
+              </Button>
+              <Button
+                variant="secondary"
+                size="lg"
+                onClick={() => void handleCopyDraft(draft)}
+              >
+                Copiar
+              </Button>
+              {copyNotice === draft.id && (
+                <span className="self-center text-sm text-text-secondary">
+                  Copiado
+                </span>
+              )}
+            </div>
+          </>
+        )}
+        {isApproved && draft.approved_at !== null && (
+          <p className="mt-2 text-sm text-text-secondary">
+            Aprobado el {noteDateFormatter.format(new Date(draft.approved_at))}
+          </p>
+        )}
+        {isApproved && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              size="lg"
+              onClick={() => void handleCopyDraft(draft)}
+            >
+              Copiar
+            </Button>
+            {copyNotice === draft.id && (
+              <span className="self-center text-sm text-text-secondary">
+                Copiado
+              </span>
+            )}
+          </div>
+        )}
+        {!isApproved && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {!showApproveConfirm && (
+              <Button
+                size="lg"
+                onClick={() => setShowApproveDraftConfirm(draft.id)}
+              >
+                Aprobar borrador
+              </Button>
+            )}
+            {showApproveConfirm && (
+              <div className="rounded-md border border-border bg-bg px-4 py-4">
+                <p className="font-semibold">
+                  Una vez aprobado no se podrá cambiar.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <Button
+                    size="lg"
+                    onClick={() => void handleApproveDraft(draft)}
+                    disabled={approvingDraft}
+                  >
+                    {approvingDraft ? 'Aprobando…' : 'Aprobar'}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="lg"
+                    onClick={() => setShowApproveDraftConfirm(null)}
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            )}
+            {!showRegen && (
+              <Button
+                variant="secondary"
+                size="lg"
+                onClick={() => setShowRegenConfirm(audience)}
+                disabled={regenerating}
+              >
+                Volver a generar
+              </Button>
+            )}
+            {showRegen && (
+              <div className="rounded-md border border-border bg-bg px-4 py-4">
+                <p className="font-semibold">Se sustituirá el texto actual.</p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <Button
+                    size="lg"
+                    onClick={() => void handleRegenerate(audience)}
+                    disabled={regenerating}
+                  >
+                    {regenerating ? 'Generando…' : 'Volver a generar'}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="lg"
+                    onClick={() => setShowRegenConfirm(null)}
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        {draftEditError !== null && !isEditing && (
+          <p className="mt-3 text-sm text-error">{draftEditError}</p>
+        )}
+      </article>
+    )
+  }
+
+  function renderProposedTaskCard(task: TaskRow) {
+    const sourceFact =
+      task.source_fact_id !== null
+        ? (sourceFacts.get(task.source_fact_id) ?? null)
+        : null
+    const isEditing = editingTaskId === task.id
+    const isAccepting = acceptingTaskId === task.id
+    return (
+      <article
+        key={task.id}
+        className="rounded-md border border-border px-4 py-3"
+      >
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h4 className="font-semibold">{task.description}</h4>
+          <Badge variant="neutral">
+            {task.origin === 'regla' ? 'Regla' : 'IA'}
+          </Badge>
+        </div>
+        {sourceFact !== null && (
+          <p className="mt-1 break-words text-sm text-text-secondary">
+            {fieldLabel(sourceFact.field_name)}: «
+            {sourceFact.evidence_quote ?? sourceFact.value}»
+          </p>
+        )}
+        {task.original_description !== null && (
+          <p className="mt-1 break-words text-sm text-text-secondary">
+            Propuesta de la IA: {task.original_description}
+          </p>
+        )}
+        {isEditing ? (
+          <div className="mt-3 space-y-3">
+            <div className="space-y-2">
+              <Label htmlFor={`tarea-editar-${task.id}`}>Descripción</Label>
+              <Input
+                id={`tarea-editar-${task.id}`}
+                className="min-h-11"
+                value={editTaskDescription}
+                onChange={(event) => {
+                  setEditTaskDescription(event.target.value)
+                  setTaskEditError(null)
+                }}
+                maxLength={200}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor={`tarea-fecha-${task.id}`}>
+                Fecha (opcional)
+              </Label>
+              <Input
+                id={`tarea-fecha-${task.id}`}
+                type="date"
+                className="min-h-11"
+                value={editTaskDueDate}
+                onChange={(event) => setEditTaskDueDate(event.target.value)}
+              />
+            </div>
+            {taskEditError !== null && (
+              <p className="text-sm text-error">{taskEditError}</p>
+            )}
+            <div className="flex flex-wrap gap-3">
+              <Button
+                size="lg"
+                onClick={() => void handleSaveEditTask(task.id)}
+                disabled={savingTask}
+              >
+                {savingTask ? 'Guardando…' : 'Guardar'}
+              </Button>
+              <Button
+                variant="secondary"
+                size="lg"
+                onClick={() => {
+                  setEditingTaskId(null)
+                  setTaskEditError(null)
+                }}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        ) : isAccepting ? (
+          <div className="mt-3 space-y-3">
+            <div className="space-y-2">
+              <Label htmlFor={`tarea-aceptar-${task.id}`}>
+                Fecha (opcional)
+              </Label>
+              <Input
+                id={`tarea-aceptar-${task.id}`}
+                type="date"
+                className="min-h-11"
+                value={acceptDueDate}
+                onChange={(event) => setAcceptDueDate(event.target.value)}
+              />
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Button
+                size="lg"
+                onClick={() => void handleAcceptTask(task)}
+                disabled={savingTask}
+              >
+                {savingTask ? 'Añadiendo…' : 'Añadir a pendientes'}
+              </Button>
+              <Button
+                variant="secondary"
+                size="lg"
+                onClick={() => {
+                  setAcceptingTaskId(null)
+                  setAcceptDueDate('')
+                }}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              size="lg"
+              onClick={() => {
+                setAcceptingTaskId(task.id)
+                setAcceptDueDate('')
+                setTaskActionError(null)
+              }}
+              disabled={savingTask}
+            >
+              Añadir a pendientes
+            </Button>
+            <Button
+              variant="secondary"
+              size="lg"
+              onClick={() => handleStartEditTask(task)}
+              disabled={savingTask}
+            >
+              Editar
+            </Button>
+            <Button
+              variant="secondary"
+              size="lg"
+              onClick={() => void handleDiscardTask(task)}
+              disabled={savingTask}
+            >
+              Descartar
+            </Button>
           </div>
         )}
       </article>
@@ -1101,6 +1914,220 @@ function NoteDetailView({ id }: { id: string | undefined }) {
                       <p className="mt-3 text-sm text-error">{approveError}</p>
                     )}
                   </div>
+                )}
+              </section>
+            )}
+
+            {isApproved && (
+              <section className="mt-8" aria-labelledby="nota-seguimiento">
+                <h2 id="nota-seguimiento" className="text-lg font-semibold">
+                  Seguimiento
+                </h2>
+
+                {followUpError !== null && (
+                  <p className="mt-3 text-sm text-error">{followUpError}</p>
+                )}
+
+                {!hasFollowUp && (
+                  <div className="mt-3">
+                    <Button
+                      size="lg"
+                      onClick={() => void handlePrepare()}
+                      disabled={preparing}
+                    >
+                      {preparing ? 'Preparando…' : 'Preparar seguimiento'}
+                    </Button>
+                    {preparing && (
+                      <p className="mt-3 text-sm text-text-secondary">
+                        Preparando borradores y tareas… puede tardar hasta un
+                        minuto.
+                      </p>
+                    )}
+                    {prepareError !== null && (
+                      <div className="mt-3">
+                        <p className="text-sm text-error">{prepareError}</p>
+                        <Button
+                          variant="secondary"
+                          size="lg"
+                          className="mt-3"
+                          onClick={() => void handlePrepare()}
+                          disabled={preparing}
+                        >
+                          Reintentar
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {hasFollowUp && (
+                  <>
+                    {prepareError !== null && (
+                      <div className="mt-3">
+                        <p className="text-sm text-error">{prepareError}</p>
+                        <Button
+                          variant="secondary"
+                          size="lg"
+                          className="mt-3"
+                          onClick={() => void handlePrepare()}
+                          disabled={preparing}
+                        >
+                          Reintentar
+                        </Button>
+                      </div>
+                    )}
+
+                    {proposedTasks.length > 0 && (
+                      <div className="mt-6">
+                        <h3 className="text-base font-semibold">
+                          Tareas propuestas
+                        </h3>
+                        <div className="mt-3 space-y-3">
+                          {proposedTasks.map((task) =>
+                            renderProposedTaskCard(task),
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {taskActionError !== null && (
+                      <p className="mt-3 text-sm text-error">
+                        {taskActionError}
+                      </p>
+                    )}
+
+                    {discardedTasks.length > 0 && (
+                      <div className="mt-6">
+                        <Button
+                          variant="secondary"
+                          size="lg"
+                          onClick={() =>
+                            setShowDiscardedTasks((value) => !value)
+                          }
+                          aria-expanded={showDiscardedTasks}
+                        >
+                          Descartadas ({discardedTasks.length})
+                        </Button>
+                        {showDiscardedTasks && (
+                          <div className="mt-3 space-y-3">
+                            {discardedTasks.map((task) => (
+                              <article
+                                key={task.id}
+                                className="rounded-md border border-border px-4 py-3"
+                              >
+                                <p className="font-semibold">
+                                  {task.description}
+                                </p>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  {task.origin !== 'agente' && (
+                                    <Button
+                                      size="lg"
+                                      onClick={() =>
+                                        void handleRestoreTask(task)
+                                      }
+                                      disabled={savingTask}
+                                    >
+                                      Recuperar
+                                    </Button>
+                                  )}
+                                </div>
+                              </article>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="mt-6">
+                      {!showAddTask && (
+                        <Button
+                          variant="secondary"
+                          size="lg"
+                          onClick={() => {
+                            setShowAddTask(true)
+                            setAddTaskError(null)
+                          }}
+                        >
+                          Añadir tarea
+                        </Button>
+                      )}
+                      {showAddTask && (
+                        <div className="mt-3 space-y-3 rounded-md border border-border px-4 py-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="tarea-nueva">Descripción</Label>
+                            <Input
+                              id="tarea-nueva"
+                              className="min-h-11"
+                              value={newTaskDescription}
+                              onChange={(event) => {
+                                setNewTaskDescription(event.target.value)
+                                setAddTaskError(null)
+                              }}
+                              autoComplete="off"
+                              maxLength={200}
+                              placeholder="Llamar al cliente para confirmar"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="tarea-nueva-fecha">
+                              Fecha (opcional)
+                            </Label>
+                            <Input
+                              id="tarea-nueva-fecha"
+                              type="date"
+                              className="min-h-11"
+                              value={newTaskDueDate}
+                              onChange={(event) =>
+                                setNewTaskDueDate(event.target.value)
+                              }
+                            />
+                          </div>
+                          {addTaskError !== null && (
+                            <p className="text-sm text-error">{addTaskError}</p>
+                          )}
+                          <div className="flex flex-wrap gap-3">
+                            <Button
+                              size="lg"
+                              onClick={() => void handleAddTask()}
+                              disabled={addingTask}
+                            >
+                              {addingTask ? 'Añadiendo…' : 'Añadir tarea'}
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              size="lg"
+                              onClick={() => {
+                                setShowAddTask(false)
+                                setAddTaskError(null)
+                              }}
+                            >
+                              Cancelar
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-6 space-y-3">
+                      {renderDraftCard('comprador', buyerDraft)}
+                      {renderDraftCard('propietario', ownerDraft)}
+                    </div>
+
+                    <p className="mt-6 text-sm text-text-secondary">
+                      Tareas: {countText(proposedTasks.length, 'propuesta', 'propuestas')} ·{' '}
+                      {countText(acceptedTasks.length, 'aceptada', 'aceptadas')} ·{' '}
+                      {countText(discardedTasks.length, 'descartada', 'descartadas')} ·{' '}
+                      {countText(manualTasks.length, 'añadida por ti', 'añadidas por ti')}
+                      {' · '}Borradores: {countText(editedDrafts.length, 'editado', 'editados')} ·{' '}
+                      {countText(approvedDrafts.length, 'aprobado', 'aprobados')}
+                    </p>
+                    {acceptedTasks.length > 0 && (
+                      <p className="mt-2 text-sm">
+                        <Link to="/pendientes" className="font-semibold underline">
+                          Ver en Pendientes
+                        </Link>
+                      </p>
+                    )}
+                  </>
                 )}
               </section>
             )}

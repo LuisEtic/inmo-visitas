@@ -1187,3 +1187,202 @@ aprobados por Luis (I-1, I-2 y mejoras 1–5).
   lista de notas), solo cuando Luis lo pida. Al empezarla, cambiar
   `APP_PHASE_LABEL` y el texto de la portada (`Home.tsx`).
 
+
+## HANDOFF FASE 6: borradores duales + bandeja de pendientes (Muse, 2026-11-12)
+
+**Construida, sin commit, sin tag, sin push y sin desplegar a Pages.**
+`git pull origin main` al empezar: ya estaba al día (HEAD `cb5f74d`,
+PR #9 fusionado). Sin tocar 0001–0008, `transcribe` ni `extract`, sin
+cambiar RLS ni el guard de `visit_notes`, sin `service_role`, sin
+claves nuevas (la función usa los `EXTRACT_*` que ya existen, con
+fallback `DRAFT_*`), sin columnas en `visit_notes`, sin dependencias
+nuevas de producción.
+
+### Archivos creados
+
+- `supabase/migrations/0009_borradores_tareas.sql` (9.396 bytes) y
+  copia idéntica `docs/deploy/supabase-fase-6.sql` (`diff` verificado).
+  `tasks`: estado `propuesta/pendiente/completada/descartada` (defecto
+  `pendiente`), `origin` (`ia/regla/agente`), `source_fact_id`,
+  `original_description`, `completed_at`, `updated_at`, índice
+  `tasks_agent_status_due_idx`; `tasks_guard` (insert/update/delete).
+  `drafts`: `status` (`borrador/aprobado`), `original_content`,
+  `generated_at/edited_at/approved_at`, único `(visit_note_id,
+  audience)`, check de filtrado en propietario y longitud 1–1500;
+  `drafts_guard` (insert/update/delete).
+- `supabase/functions/drafts/index.ts` + `rules.ts` + `rules.test.ts`.
+- `src/features/followup/api.ts` (preparar, borradores, tareas de la
+  nota; reexporta las de `tasks/api.ts`).
+- `src/features/tasks/api.ts` + `buckets.ts` + `buckets.test.ts`.
+- `src/pages/Notes.tsx` (`/notas`), `src/pages/Pending.tsx`
+  (`/pendientes`).
+
+### Archivos modificados
+
+- `src/lib/database.types.ts` (`TaskRow/Insert/Update`, `TaskStatus`,
+  `TaskOrigin`, `DraftRow/Insert/Update`, `DraftAudience`,
+  `DraftStatus`; `tasks` y `drafts` en `Database`; relaciones de
+  `visit_notes` con `clients`/`properties` para los selects
+  incrustados).
+- `src/lib/db-errors.ts` + tests: `nota_no_aprobada`,
+  `borrador_aprobado`, `fuente_no_valida`, 23505 de borradores con
+  contexto `{ drafts: true }`; `transicion_no_valida` con contexto
+  `{ task: true }` → «La tarea no puede pasar a ese estado» (sin
+  contexto sigue el texto de la nota, fijado por test).
+- `src/lib/search.ts` + `src/pages/search.test.ts`:
+  `matchesNoteQuery` (cliente o referencia, sin tildes).
+- `src/features/notes/api.ts`: `listNotes` (estado + búsqueda +
+  paginación 25/25, con cliente e inmueble), `listNotesByStatus`,
+  `getNotesByIds`.
+- `src/pages/NoteDetail.tsx`: sección «Seguimiento» (solo nota
+  aprobada) con borradores, tareas propuestas, descartadas plegadas,
+  «Añadir tarea» y resumen.
+- `src/App.tsx` (rutas `/notas` y `/pendientes`, lazy +
+  `RequireAuth`), `src/components/PrivateNav.tsx` («Notas» y
+  «Pendientes» con contador), `src/pages/Home.tsx` (enlaces a Notas y
+  Pendientes con contador; texto «Fase 6 — Borradores duales +
+  bandeja de pendientes»), `src/lib/app-label.ts`
+  (`'inmo-visitas · Fase 6'`).
+- `supabase/functions/README.md`: sección `drafts` (despliegue,
+  *secrets* con fallback, curl).
+
+### Verificaciones (2026-11-12, todo en verde)
+
+- `npm test`: **141/141** (94 previos + 47 nuevos: `rules.test.ts`
+  37, `buckets.test.ts` 6, `db-errors.test.ts` 2, `search.test.ts` 2).
+- `npx tsc --noEmit` sin errores y `npm run build` sin errores en
+  base `/` y con `VITE_BASE_PATH=/inmo-visitas/`; `dist/404.html`
+  copiado. Mayor trozo JS: `vendor-react` 255.497 bytes (< 500 kB).
+- `npm run lint`: 0 errores, 2 avisos (los de shadcn aceptados).
+- Grep: 0 claves (`gsk_`/`AIza`/`sk-`) en `src/`, `supabase/` y
+  `docs/` (la única mención de `gsk_` es el informe de 0
+  ocurrencias en `docs/HANDOFF.md`); `service_role` solo en
+  comentarios («NUNCA `service_role`»).
+- Lección: `npm run build` (`tsc -b`) es más estricto que `npx tsc
+  --noEmit`: pilló un `PostgrestError` inventado en `tasks/api.ts`
+  (faltaban `toJSON` y `name`); se pasa el error real de Supabase.
+  Hay que correr siempre el build, no solo `tsc --noEmit`.
+- Sin `psql`, `docker` ni `deno` en esta máquina: la 0009 no se ha
+  ejecutado en local y no hay `deno check` de `drafts` (lo hará
+  Claude en la revisión, como en la Fase 5).
+
+### Qué se envía al modelo en cada llamada (copiado del código)
+
+Dos llamadas en paralelo (`Promise.all`), chat completions,
+`temperature: 0.3`, `response_format: { type: 'json_object' }`,
+*timeout* 60 s cada una. Solo categoría, nombre y valor de los datos
+no descartados + la referencia del inmueble. Ni nombres, ni
+teléfonos, ni dirección, ni precio, ni citas.
+
+Llamada del comprador — sistema (`SYSTEM_PROMPT_BUYER`):
+
+> Eres un asistente que redacta el mensaje que un agente
+> inmobiliario envía a un comprador tras una visita. Escribe en
+> español, con tuteo, cercano y profesional, entre 60 y 140
+> palabras. Empieza por «Hola {nombre},» y firma con «{agente}».
+> Usa {inmueble} para referirte al inmueble. Responde a lo que el
+> cliente pidió o a sus objeciones sin prometer nada que no esté en
+> los datos. Si hay una cita pendiente, NUNCA la des por
+> confirmada: propón confirmarla y pregunta qué falta (por ejemplo,
+> la hora). No menciones el presupuesto ni la financiación. No
+> inventes ningún dato. Devuelve SOLO un objeto JSON {"draft":
+> "...", "tasks": [{"description": "...", "fact_index": n}]} con
+> las tareas que el agente debería hacer a partir de los datos
+> (máximo 10, descripción breve de 3 a 200 caracteres, fact_index
+> es la posición del dato en la lista enviada, empezando en 0).
+
+Usuario (nota de ejemplo, Ana + V-18):
+
+```json
+{"inmueble": "V-18", "datos": [{"category": "objecion", "field_name": "ruido_calle", "value": "Ruido de la calle Alcalá por la noche"}, {"category": "cita_pendiente", "field_name": "proxima_visita", "value": "Viernes, hora por confirmar"}, {"category": "desconocido", "field_name": "hora_cita", "value": "Hora de la segunda visita por confirmar"}, {"category": "presupuesto", "field_name": "presupuesto_declarado", "value": "230.000 euros"}, {"category": "hecho_declarado", "field_name": "informacion_solicitada", "value": "Gastos de comunidad e IBI"}]}
+```
+
+Llamada del propietario — sistema (`SYSTEM_PROMPT_OWNER`):
+
+> Eres un asistente que redacta el mensaje que un agente
+> inmobiliario envía al propietario de un inmueble tras una visita.
+> Escribe en español, con usted, entre 50 y 120 palabras. Empieza
+> por «Hola {propietario},» y firma con «{agente}». Usa {inmueble}
+> para referirte al inmueble. Al cliente llámalo «el cliente» o
+> «la persona interesada», nunca por su nombre. No menciones el
+> presupuesto, ofertas ni la situación económica del comprador. Si
+> hay una cita pendiente, NUNCA la des por confirmada. No inventes
+> ningún dato. Devuelve SOLO un objeto JSON {"draft": "..."}.
+
+Usuario: igual que el comprador pero sin el dato de presupuesto
+(`ownerFacts` quita `presupuesto` y cualquier dato con término
+económico o cifra de dinero): 4 datos.
+
+Sustitución de marcadores (en el servidor, tras validar):
+`{nombre}` = nombre de pila del cliente (provisional → se quita y
+queda «Hola,»); `{propietario}` = nombre de pila del propietario;
+`{inmueble}` = referencia + dirección, p. ej. `V-18 (calle Alcalá
+120)`; `{agente}` = nombre completo del agente.
+
+### Reglas en las pruebas (reintentos, 422)
+
+En `rules.test.ts` las reglas saltan en **18 tests**: `ownerLeaks`
+4 tests de rechazo (cifras `230.000 €` y `230000`, términos
+`presupuesto` e `hipoteca`, nombre `Ana` y apellido `García`);
+`confirmsAppointment` 2 («queda confirmada la visita del viernes a
+las 18:00» y una hora inventada); `checkPlaceholders` 3 (marcador
+desconocido `{telefono}` y `{nombre}` en el propietario);
+`validateDraft` 3 rechazos de principio a fin; `requiredTasks` añade
+la tarea de regla en 2 tests; el parseo Zod rechaza 4 respuestas
+inválidas (JSON no válido, borrador vacío o de más de 1500, tarea
+corta o `fact_index` negativo, más de 10 tareas). **0 reintentos
+reales y 0 códigos 422 en los tests**: el bucle de reintento y el 422
+viven en `index.ts` (Deno, no se prueba en Vitest); el camino 422 se
+acepta por el código, como el criterio 10 de la Fase 5.
+
+### Decisiones de interpretación (no están en el prompt; a revisar)
+
+- `tasks_guard` es `before insert or update or delete` (el prompt
+  dice «insert or update»): sin el evento DELETE no se puede aplicar
+  la regla de borrado.
+- Insertar una tarea como `completada`/`descartada` y borrar fuera de
+  regla lanzan `transicion_no_valida` (el prompt no nombra el error).
+- Insertar un borrador con `status = 'aprobado'` pone `approved_at`
+  si es null (el prompt no lo especifica).
+- `updated_at` no tiene defecto en el insert (el trigger lo pone en
+  el update).
+- `validateDraft` recibe el texto crudo + los valores de los
+  marcadores y devuelve el texto ya sustituido; `confirmsAppointment`
+  recibe `(text, facts)` (el prompt lo lista como `(text)`);
+  `ownerLeaks` devuelve el motivo, no solo booleano.
+- Con `audience = 'comprador'` se añade al sistema «No incluyas
+  tareas en la respuesta.» (las tareas solo se piden sin `audience`).
+- Sin `audience`, si algún borrador pedido ya está `aprobado` → 409.
+- En «Seguimiento» solo se listan las tareas propuestas y las
+  descartadas; las aceptadas (`pendiente`/`completada`) se ven en
+  `/pendientes` (enlace «Ver en Pendientes» bajo el resumen).
+- Si el borrador del comprador falla las reglas dos veces (sin
+  `audience`), las tareas propuestas antiguas se quedan (no se
+  borran): solo se guardan el borrador del propietario y sus tareas
+  si el del comprador pasó.
+- La respuesta 422 es solo `{ error }`; la UI recarga los borradores
+  para saber cuál falta y ofrecer «Escribir yo».
+- `listNotes` carga todas y filtra en cliente (patrón del resto de
+  listas); con muchas notas convendrá paginar en la base (Fase 9).
+
+### Qué queda pendiente (para Luis / el padre)
+
+1. **Aplicar la 0009**: `docs/deploy/supabase-fase-6.sql` en el SQL
+   Editor (o por la Management API, como la 0008).
+2. **Desplegar `drafts`**: Via Editor con `index.ts` + `rules.ts`
+   (ver `supabase/functions/README.md`); sin *secrets* nuevos.
+3. **Probar en el navegador a 360 px**, en local y en Pages, cada
+   pantalla y acción: «Preparar seguimiento» en la nota de ejemplo
+   (Ana + V-18, aprobada), revisar los dos borradores y las tareas,
+   aprobar un borrador, «Volver a generar», «Escribir yo» tras un
+   422, `/pendientes` (grupos, completar con deshacer, cambiar
+   fecha, reabrir) y `/notas` (filtro, búsqueda «garcia», «Cargar
+   más»). La extracción es lenta o intermitente hoy (28 s, algún
+   502): los borradores usan el mismo proveedor; la UI avisa de
+   que puede tardar hasta un minuto.
+4. Criterios 1, 4, 6, 9 y 10 necesitan la 0009 aplicada y `drafts`
+   desplegada; el `deno check` de `drafts`, en la revisión de
+   Claude.
+5. Commit «Fase 6: borradores duales + bandeja de pendientes», tag
+   `v0.6-fase-6` y push a main (con el token de Luis) + despliegue
+   a Pages. No hecho por Muse: no era parte de su tarea.

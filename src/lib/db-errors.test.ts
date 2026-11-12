@@ -28,6 +28,33 @@ describe('translateDbError', () => {
     )
   })
 
+  it('traduce los errores de la migración 0009 (Fase 6)', () => {
+    expect(translateDbError(pgError('P0001', 'nota_no_aprobada'))).toBe(
+      'Aprueba la nota antes de preparar el seguimiento',
+    )
+    expect(translateDbError(pgError('P0001', 'borrador_aprobado'))).toBe(
+      'El borrador está aprobado y ya no se puede cambiar',
+    )
+    expect(translateDbError(pgError('P0001', 'fuente_no_valida'))).toBe(
+      'El dato de origen no pertenece a esta nota',
+    )
+    // El mismo error, en una tarea, habla de la tarea.
+    expect(
+      translateDbError(pgError('P0001', 'transicion_no_valida'), {
+        task: true,
+      }),
+    ).toBe('La tarea no puede pasar a ese estado')
+  })
+
+  it('traduce el duplicado de borrador por destinatario (23505)', () => {
+    expect(
+      translateDbError(
+        pgError('23505', 'duplicate key value violates unique constraint'),
+        { drafts: true },
+      ),
+    ).toBe('Ya hay un borrador para este destinatario; vuelve a generarlo')
+  })
+
   it('un P0001 desconocido cae en el mensaje genérico', () => {
     expect(translateDbError(pgError('P0001', 'otro_error'))).toBe(
       'Ha ocurrido un error. Inténtalo de nuevo.',
