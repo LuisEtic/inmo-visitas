@@ -58,7 +58,8 @@ Normas del proyecto. Leer antes de tocar código, junto con
 - Fase 5: extracción con evidencia + revisión y aprobación (tag
   `v0.5-fase-5`, migraciones 0007 y 0008, Edge Function `extract`),
   revisada por Claude con ajustes (0008: el estado de la nota solo avanza).
+  Cerrada el 2026-11-12 (Pages desplegado y prueba rápida en vivo).
 - Fase 6 (siguiente, solo cuando Luis lo pida): borradores duales + bandeja
-  de pendientes. Su prompt se escribe al cerrar la Fase 5.
+  de pendientes. Su prompt se escribe cuando Luis lo pida.
 - Lista de notas y borradores: Fase 6.
 - Cada pantalla se prueba en el navegador, no solo por API.

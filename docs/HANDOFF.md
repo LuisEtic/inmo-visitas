@@ -1166,3 +1166,24 @@ aprobados por Luis (I-1, I-2 y mejoras 1–5).
   94/94 tests, `tsc` sin errores, build con base `/inmo-visitas/`,
   MD5 del índice en vivo igual al local, y en `dist/` ya solo quedan
   «Fase 1» (pantalla de diseño, intencionado) y «Fase 5».
+
+## Cierre de la Fase 5 (Claude, 2026-11-12)
+
+- **Fase 5 cerrada.** Muse/Argo desplegó Pages (`gh-pages` `0b2e850`,
+  código `7d0ba2e`) e hizo la prueba rápida en vivo: cabecera
+  «inmo-visitas · Fase 5» y MD5 del índice en vivo igual al local.
+- Comprobado por Claude sobre `main` (`c0781f8`): `tsc --noEmit` sin
+  errores, `npm test` 94/94, `npm run lint` 0 errores (2 avisos previos
+  de shadcn). El parche solo cambia la etiqueta de Perfil, Inmuebles y
+  Registro por `APP_PHASE_LABEL`; en `src/` ya no quedan etiquetas de
+  fase escritas a mano en cabeceras (las menciones restantes son
+  comentarios y el texto de la portada, Fase 5). La web en vivo no se
+  pudo abrir desde el contenedor de Claude: se acepta la verificación
+  MD5 de Argo.
+- Queda abierto: la extracción lenta o intermitente del camino
+  Supabase → Google (ver ESTADO) y los pulidos que salgan con un posible
+  cliente.
+- Siguiente: **Fase 6** (borradores duales + bandeja de pendientes +
+  lista de notas), solo cuando Luis lo pida. Al empezarla, cambiar
+  `APP_PHASE_LABEL` y el texto de la portada (`Home.tsx`).
+
