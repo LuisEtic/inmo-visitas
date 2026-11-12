@@ -15,6 +15,7 @@ import {
   updateClient,
 } from '../features/clients/api'
 import type { ClientFormValues } from '../features/clients/schema'
+import { APP_PHASE_LABEL } from '../lib/app-label'
 
 /**
  * /clientes/nuevo y /clientes/:id (privadas): el mismo formulario para
@@ -113,7 +114,7 @@ function ClientDetailView({ id }: { id: string | undefined }) {
     <>
       <PrivateNav />
       <main className="mx-auto max-w-md bg-bg px-4 py-8 text-text-primary">
-        <p className="font-mono text-xs text-text-secondary">inmo-visitas · Fase 3</p>
+        <p className="font-mono text-xs text-text-secondary">{APP_PHASE_LABEL}</p>
         <h1 className="mt-2 text-2xl">
           {isNew ? 'Nuevo cliente' : (client?.full_name ?? 'Cliente')}
         </h1>

@@ -1,3 +1,4 @@
+import { FunctionsHttpError } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase'
 import { translateDbError } from '../../lib/db-errors'
 import type {
@@ -52,7 +53,7 @@ export async function extractNote(noteId: string): Promise<ExtractResult> {
     body: { visit_note_id: noteId },
   })
   if (error !== null) {
-    throw new Error('No se han podido extraer los datos. Inténtalo de nuevo.')
+    throw new Error(await extractErrorMessage(error))
   }
   const result = data as ExtractResult | null
   if (
@@ -61,9 +62,45 @@ export async function extractNote(noteId: string): Promise<ExtractResult> {
     typeof result.discarded_no_evidence !== 'number' ||
     typeof result.discarded_sensitive !== 'number'
   ) {
-    throw new Error('No se han podido extraer los datos. Inténtalo de nuevo.')
+    throw new Error(EXTRACT_ERROR)
   }
   return result
+}
+
+const EXTRACT_ERROR = 'No se han podido extraer los datos. Inténtalo de nuevo.'
+
+/**
+ * Mensaje para el agente cuando falla `extract`. Los 400 («La nota no
+ * tiene texto para extraer») y 409 («La nota ya está en revisión») traen
+ * un mensaje en español propio de la función que se muestra tal cual;
+ * el resto (401, 404, 502, red) se queda en el mensaje genérico.
+ */
+async function extractErrorMessage(error: unknown): Promise<string> {
+  if (!(error instanceof FunctionsHttpError)) {
+    return EXTRACT_ERROR
+  }
+  const response: unknown = error.context
+  if (!(response instanceof Response)) {
+    return EXTRACT_ERROR
+  }
+  if (response.status !== 400 && response.status !== 409) {
+    return EXTRACT_ERROR
+  }
+  try {
+    const body: unknown = await response.json()
+    if (
+      typeof body === 'object' &&
+      body !== null &&
+      'error' in body &&
+      typeof body.error === 'string' &&
+      body.error !== ''
+    ) {
+      return body.error
+    }
+  } catch {
+    // Cuerpo no JSON: mensaje genérico.
+  }
+  return EXTRACT_ERROR
 }
 
 export type ReviewAction = 'aceptar' | 'editar' | 'descartar' | 'recuperar'

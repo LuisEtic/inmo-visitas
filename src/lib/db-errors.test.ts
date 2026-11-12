@@ -19,6 +19,15 @@ describe('translateDbError', () => {
     )
   })
 
+  it('traduce los errores de la migración 0008', () => {
+    expect(translateDbError(pgError('P0001', 'transicion_no_valida'))).toBe(
+      'La nota no puede pasar a ese estado',
+    )
+    expect(translateDbError(pgError('P0001', 'nota_sin_datos'))).toBe(
+      'La nota necesita al menos un dato no descartado para aprobarla',
+    )
+  })
+
   it('un P0001 desconocido cae en el mensaje genérico', () => {
     expect(translateDbError(pgError('P0001', 'otro_error'))).toBe(
       'Ha ocurrido un error. Inténtalo de nuevo.',

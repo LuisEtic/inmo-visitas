@@ -97,12 +97,25 @@ export function normalizeForEvidence(text: string): string {
 }
 
 /**
- * La cita debe aparecer en el texto comparando ambos normalizados.
- * Una cita vacía nunca cuenta como evidencia.
+ * Longitud mínima de una cita (revisión de la Fase 5): al menos
+ * `MIN_QUOTE_WORDS` palabras y `MIN_QUOTE_CHARS` caracteres, ya
+ * normalizada. Una cita como «a» o «el» aparece en casi cualquier texto
+ * y no respalda nada.
+ */
+export const MIN_QUOTE_WORDS = 2
+export const MIN_QUOTE_CHARS = 8
+
+/**
+ * La cita debe tener la longitud mínima y aparecer en el texto
+ * comparando ambos normalizados. Una cita vacía o trivial nunca cuenta
+ * como evidencia.
  */
 export function hasEvidence(quote: string, text: string): boolean {
   const normalizedQuote = normalizeForEvidence(quote)
-  if (normalizedQuote === '') {
+  if (
+    normalizedQuote.length < MIN_QUOTE_CHARS ||
+    normalizedQuote.split(' ').length < MIN_QUOTE_WORDS
+  ) {
     return false
   }
   return normalizeForEvidence(text).includes(normalizedQuote)
@@ -112,6 +125,53 @@ export function hasEvidence(quote: string, text: string): boolean {
 export function isSensitiveField(fieldName: string): boolean {
   const lower = fieldName.toLowerCase()
   return SENSITIVE_FIELDS.some((word) => lower.includes(word))
+}
+
+/**
+ * Patrones que marcan un VALOR como categoría especial (art. 9 RGPD),
+ * sobre el texto en minúsculas y sin tildes, con límite de palabra
+ * (`terraza` no es `raza`, `saludo` no es `salud`). Es más corta que
+ * `SENSITIVE_FIELDS`: «origen» o «política» son habituales en notas
+ * inmobiliarias («el origen del ruido», «política de mascotas») y en el
+ * valor darían falsos positivos.
+ */
+export const SENSITIVE_VALUE_PATTERNS: readonly RegExp[] = [
+  /\bsalud\b/,
+  /\benferm(o|a|os|as|edad|edades)\b/,
+  /\bdiagnostic/,
+  /\breligi(on|osa|oso|osas|osos)\b/,
+  /\betni(a|as|co|ca|cos|cas)\b/,
+  /\braza\b/,
+  /\bnacionalidad\b/,
+  /\borientacion sexual\b/,
+  /\b(homo|hetero|bi)sexual/,
+  /\bideologia\b/,
+  /\bafiliacion politica\b/,
+  /\bsindica(to|tos|l)\b/,
+  /\bembaraz(o|ada)\b/,
+  /\bdiscapacidad\b/,
+]
+
+/** Minúsculas y sin tildes, para comparar con `SENSITIVE_VALUE_PATTERNS`. */
+function foldAccents(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+}
+
+/** Un valor es sensible si coincide con alguno de los patrones. */
+export function isSensitiveValue(value: string): boolean {
+  const folded = foldAccents(value)
+  return SENSITIVE_VALUE_PATTERNS.some((pattern) => pattern.test(folded))
+}
+
+/**
+ * Un dato es sensible si lo es su nombre o su valor. La cita no se
+ * mira: puede contener contexto legítimo junto a otra cosa.
+ */
+export function isSensitiveFact(fact: { field_name: string; value: string }): boolean {
+  return isSensitiveField(fact.field_name) || isSensitiveValue(fact.value)
 }
 
 export type AppliedRules = {
@@ -126,7 +186,7 @@ function dedupeKey(fact: ModelFact): string {
 
 /**
  * Aplica las reglas a los datos del modelo, en este orden: descarta los
- * sensibles, descarta los sin evidencia y, entre duplicados (misma
+ * sensibles (por nombre o por valor), descarta los sin evidencia y, entre duplicados (misma
  * categoría + campo + valor normalizado), se queda el de mayor confianza.
  */
 export function applyExtractionRules(
@@ -139,7 +199,7 @@ export function applyExtractionRules(
   let discardedSensitive = 0
 
   for (const fact of facts) {
-    if (isSensitiveField(fact.field_name)) {
+    if (isSensitiveFact(fact)) {
       discardedSensitive += 1
       continue
     }

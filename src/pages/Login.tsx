@@ -9,6 +9,7 @@ import { SupabaseMissingNotice } from '../components/SupabaseMissingNotice'
 import { useAuth } from '../lib/auth-context'
 import { mapAuthErrorMessage } from '../lib/auth-errors'
 import { supabase } from '../lib/supabase'
+import { APP_PHASE_LABEL } from '../lib/app-label'
 
 const loginSchema = z.object({
   email: z.string().email('Introduce un email válido.'),
@@ -110,7 +111,7 @@ export default function Login() {
   return (
     <main className="mx-auto max-w-md bg-bg px-4 py-12 text-text-primary">
       <p className="font-mono text-xs text-text-secondary">
-        inmo-visitas · Fase 2
+        {APP_PHASE_LABEL}
       </p>
       <h1 className="mt-2 text-2xl">Entrar</h1>
       <p className="mt-2 text-base text-text-secondary">
