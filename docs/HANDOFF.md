@@ -1502,3 +1502,28 @@ acepta por el código, como el criterio 10 de la Fase 5.
 - **Pendiente:** redespliegue con el código nuevo; después,
   re-verificar solo el borrador del comprador (criterio 1) y probar
   en el navegador a 360 px las pantallas con sesión.
+
+### Redespliegue con el código nuevo y verificación final (Argo, 2026-11-12)
+
+- **Luis redesplegó `drafts` pegando los dos archivos de nuevo:
+  v3 ACTIVA ~18:17.** Esta vez el fix SÍ entró: el borrador del
+  comprador regenerado dice «Hola Ana, gracias por visitar V-18
+  (Calle de Alcalá 120) junto a tu pareja... te propongo confirmar
+  el viernes a las 17h, pero dime si te va bien esa hora o
+  prefieres otro momento... Un saludo, Agente A Prueba» — destinatario
+  correcto, tuteo, responde al ruido y a la petición (gastos, IBI,
+  informe), propone la visita sin confirmarla (las 17h están en los
+  datos, editadas por Luis), firma con el agente, sin presupuesto.
+  **Criterio 1 VERIFICADO POR API: PASS** (comprador + propietario
+  + 3 tareas con dato de origen).
+- **Resumen de la verificación API de la Fase 6: criterios 1, 4, 6
+  y 9 PASS.** Criterio 4: 18/18 (guards). Criterio 9: B → 404, sin
+  JWT → 401. Criterio 6: tarea aceptada intacta al regenerar el
+  otro destinatario; borrador no regenerado intacto. Llamada
+  completa: funciona, pero con reintentos por los 503 de Gemini
+  («high demand», tasa alta hoy; no es fallo de paralelismo).
+- **Pendiente:** probar en el navegador a 360 px las pantallas con
+  sesión (`/notas/:id` con la sección «Seguimiento», `/pendientes`,
+  `/notas`) — la de acceso ya se comprobó; la ventana de pruebas no
+  bajó a 360 px exactos ni abrió la consola. Después, revisión de
+  Claude (pasarle este HANDOFF).
