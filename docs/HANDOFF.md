@@ -1157,3 +1157,12 @@ aprobados por Luis (I-1, I-2 y mejoras 1–5).
   anterior (etiqueta corregida). La cabecera «inmo-visitas · Fase 5»
   está en el build local (constante `APP_PHASE_LABEL`); queda
   comprobarla en vivo tras el despliegue.
+
+- **Parche de etiqueta (Argo, 2026-11-12, `7d0ba2e`):** al comprobar
+  en vivo que la cabecera dijera «inmo-visitas · Fase 5», tres
+  pantallas seguían con la etiqueta escrita a mano: Perfil y
+  lista de Inmuebles («Fase 3») y Registro («Fase 2»). Se pasaron
+  a `APP_PHASE_LABEL`, como el resto. Verificado en local y en vivo:
+  94/94 tests, `tsc` sin errores, build con base `/inmo-visitas/`,
+  MD5 del índice en vivo igual al local, y en `dist/` ya solo quedan
+  «Fase 1» (pantalla de diseño, intencionado) y «Fase 5».
