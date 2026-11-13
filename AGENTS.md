@@ -75,6 +75,10 @@ Normas del proyecto. Leer antes de tocar código, junto con
   revisada por Claude con ajustes (cola de audios, confirmación por
   nombre, descarga en iPhone). Pendiente de cerrar: Pages desde `main`
   y prueba de Luis en el móvil.
-- Fase 9 (siguiente, solo cuando Luis lo pida): pulido, móvil y
-  resiliencia (`docs/prompts/PROMPT-FASE-9.md`).
+- Fase 9: pulido, móvil y resiliencia (tag `v0.9-fase-9`, sin
+  migración), revisada por Claude con ajustes (B-8 con la ventana
+  abierta sin `noopener`, subida con respuesta perdida, zonas táctiles
+  del perfil). Última fase del MVP. Pendiente de cerrar: desplegar
+  `drafts` y `crm-export`, Pages desde `main` y prueba de Luis en el
+  móvil.
 - Cada pantalla se prueba en el navegador, no solo por API.

@@ -104,7 +104,7 @@ export default function PrivacyActions() {
             <div className="mt-8">
               <Link
                 to="/perfil"
-                className="text-sm font-semibold underline underline-offset-2"
+                className="inline-flex min-h-11 items-center text-sm font-semibold underline underline-offset-2"
               >
                 Volver a mi perfil
               </Link>

@@ -3147,3 +3147,139 @@ sin cambios en las Edge Functions).**
   desplegar `drafts` y `crm-export` por Claude desde `main`, Pages,
   criterios 1–5, 7, 8 y 10 en navegador/móvil real con Luis, y
   revisión de Claude.
+
+### Revisión de Claude (2026-11-13, Claude Code)
+
+**Resultado: OK con 4 ajustes (R-1 a R-4). Sin migración nueva. B-8,
+tal como llegó, no funcionaba.**
+
+**Comprobaciones (sobre `d5376ce` y después sobre esta rama):**
+
+- `npm ci`, `npx tsc --noEmit` (0 errores), `npm run lint` (2 avisos
+  de shadcn aceptados, 0 errores), `npm test` **268/268 → 275/275**
+  (7 nuevos), `npm run build` en base `/` y `/inmo-visitas/` sin
+  errores; trozo mayor `vendor-react` 255,49 kB.
+- **`deno check` por primera vez desde la Fase 8** (Deno 2.9.6 desde
+  el registro npm, porque `dl.deno.land` no es accesible desde aquí):
+  `crm-export` OK; `drafts`, `transcribe` y `extract` fallaban con
+  **el mismo error de tipos desde la Fase 8** en `checkDailyLimit`
+  (ver R-4). Tras R-4, las cuatro pasan.
+- **0001–0012 en PostgreSQL 16 temporal** con `auth`/`storage`
+  simulados y `rls_auto_enable()` de stub: todo se aplica; 0012
+  idempotente.
+- **Prueba negativa de RLS** con dos agentes de sacrificio
+  (`example.com`): B no ve clientes, notas, exportaciones ni audios de
+  A; el `update` de B sobre una exportación de A afecta a 0 filas; B no
+  puede subir un audio a la carpeta de A (RLS de `storage.objects`) ni
+  insertar una exportación en la nota de A (la guarda responde
+  `nota_no_aprobada`); `anon` no ve nada.
+- **B-7 en PostgreSQL, como Agente A** (las mismas consultas que hace
+  `crm-export`): de tres `pendiente` (inmovilla hace 15 min, inmovilla
+  hace 5 min, witei hace 30 min), solo la primera pasa a `error` con
+  «Sin respuesta (interrumpida)»; la guarda deja `pendiente → error`
+  y luego no deja reabrirla (`exportacion_cerrada`). **Criterio 7 OK.**
+- **Navegador (Chromium a 360 × 780, build de producción con Supabase
+  simulado en memoria, destino `whatsapp`, micrófono simulado, 0
+  peticiones fuera del simulador):**
+  - 16 pantallas (`/`, `/capturar`, `/clientes`, `/clientes/:id` con
+    y sin notas, `/clientes/nuevo`, `/inmuebles`, `/inmuebles/:id`,
+    `/inmuebles/nuevo`, `/notas`, `/notas/:id` en `transcribed`,
+    `extracted` y `approved` con audio, `/pendientes`, `/perfil`,
+    `/perfil/acciones`): `scrollWidth` 360 = ancho de la ventana, 0
+    errores de consola. Con sesión salieron **3 enlaces de acción
+    por debajo de 44 px** que el repaso sin sesión no podía ver
+    (R-3). Tras R-3: 0.
+  - **Criterio 1:** fallo inyectado en el `PATCH` de `audio_url` →
+    «Reintentar subida» → nota guardada, **1 sola subida y 1 sola
+    nota creada**. OK.
+  - **Criterio 2:** `setOffline(true)` → aviso fijo con el texto
+    exacto; Guardar sigue activo; al volver, el aviso desaparece;
+    `beforeunload` cancelado con grabación sin guardar. OK.
+  - **Criterio 3:** al transcribir una nota con audio, **1 sola**
+    petición `POST …/object/sign/…` (la otra petición a esa ruta es la
+    descarga del propio `<audio>`). OK.
+  - **Criterio 4:** transcripción simulada de 12 s: a los 5 s no hay
+    aviso; a los 11 s, «Puede tardar hasta un minuto.»; al terminar
+    desaparece. OK.
+  - **B-10 y B-12 (criterio 9):** «Borrar cliente y todos sus datos»
+    con notas, «Borrar» sin notas; aviso nuevo de la pestaña de voz.
+    OK.
+  - **B-8 (criterio 8):** fallaba (ver R-1). Tras R-1, se abre una
+    sola ventana, que navega a `https://wa.me/?text=…` con
+    `window.opener === null`.
+- Código leído contra el prompt: B-1 (las tareas de regla salen con
+  `[]` si el comprador da 422 y se guardan antes del 422 del paso
+  12), B-3 (cuatro casos con su contraparte), B-5 (frase en los dos
+  `SYSTEM_PROMPT`), B-2 y B-11 (a) documentados en
+  `docs/rgpd/riesgos.md`, B-13 (sin emails nuevos), checklist de la
+  Etapa 6. Conforme.
+
+**Ajustes de esta revisión:**
+
+- **R-1 (alta) — B-8 no funcionaba.** `window.open('', '_blank',
+  'noopener')` devuelve **siempre `null`**: lo dice la especificación
+  HTML y lo he comprobado en Chromium. Por eso `whatsappWindow` nunca
+  existía y el código caía en el `window.open` de después del `await`,
+  que es justo el B-8 original. Ahora la ventana se abre sin
+  `noopener` y se anula `opener` a mano en cuanto se abre, con la misma
+  protección (`src/lib/popup.ts` + 3 tests). **Pages está desplegado
+  con el fallo** (`c6f7841`): hay que volver a desplegarlo tras fusionar
+  antes de probar el criterio 8 en el iPhone.
+- **R-2 (media; punto 2 de Argo) — respuesta perdida tras una subida
+  correcta.** Si la subida da error, `uploadAudio` pregunta a Storage
+  (`exists()`, la misma llamada que la cola de audios usa desde la
+  Fase 8) si el objeto ya está. Si está, lo da por subido. Es seguro
+  por cuatro razones: la ruta es única por nota; «Volver a grabar» y el
+  cambio de cliente o de inmueble ya crean otra nota (lo hizo el
+  constructor); solo el agente escribe en su carpeta (0006); y Storage
+  no deja objetos a medias. Probado en el navegador en los dos casos:
+  respuesta cortada → la nota se guarda al primer intento; respuesta
+  cortada y `exists()` también cortado → error, y «Reintentar» termina
+  sin «ya existe» (2 intentos de subida, 1 objeto). 4 tests en
+  `src/features/notes/api.upload.test.ts`. No necesita política nueva:
+  `visit_audio_select_own` ya existe.
+- **R-3 (baja) — zonas táctiles con sesión.** «Volver al inicio»,
+  «Cerrar sesión» y el enlace a «Acciones de privacidad» en `/perfil`,
+  y «Volver a mi perfil» en `/perfil/acciones`, medían 17–20 px. Llevan
+  ahora `inline-flex min-h-11 items-center`, el mismo patrón que
+  `/login`. Los enlaces dentro de una frase («Regístrate») se quedan
+  como decidió el constructor.
+- **R-4 (baja) — `deno check`.** `checkDailyLimit(supabase:
+  ReturnType<typeof createClient>)` no casaba con el cliente creado
+  (TS2345 y TS2353) en `drafts`, `transcribe` y `extract`. Ahora se usa
+  `SupabaseClient`. **Es solo de tipos:** el JavaScript desplegado es el
+  mismo, así que no hace falta volver a desplegar `transcribe` ni
+  `extract` por esto.
+
+**Punto 1 de Argo (botón por defecto de 40 a 44 px en toda la app):
+se acepta.** Solo cambia la variante `default` de tamaño (`sm` y `lg`
+siguen igual), y los tokens de color, fuente y radio no se tocan. Con
+él, el repaso con sesión no encuentra ningún botón por debajo de 44 px
+ni ningún desbordamiento a 360 px. 44 × 44 es el mínimo de Apple (Human
+Interface Guidelines) y el nivel AAA del criterio 2.5.5 de las WCAG
+2.2 (el AA, 2.5.8, pide 24 × 24) (Apple, s. f.; W3C, 2023).
+
+**Observación (no se cambia):** con R-2, «Volver a grabar» o cambiar
+de cliente después de un fallo deja la nota anterior en `draft` y sin
+audio. Hay que crear otra nota para no mezclar audios, y la anterior se
+puede borrar desde la app desde la Fase 8. Se anota para el piloto.
+
+**Despliegue de Edge Functions: NO HECHO en esta sesión.** El conector
+de Supabase no se pudo conectar (503 y luego tiempo de espera
+agotado) en ningún momento de la sesión. Siguen activas `drafts` v9 y
+`crm-export` v7 (Fase 8), sin B-1, B-3, B-5 ni B-7. Pendiente
+(Claude, cuando vuelva el conector), desde `main` y con Verify JWT:
+`drafts` (`index.ts`, `rules.ts`, `cors.ts`, `limit.ts`) y
+`crm-export` (`index.ts`, `mappers.ts`, `expiry.ts`, `cors.ts`), sin
+los `.test.ts`. Da igual desplegar antes o después de fusionar este
+PR: R-4 no cambia el JavaScript de `drafts`.
+
+**Referencias**
+
+- Apple. (s. f.). *Accessibility*. Human Interface Guidelines.
+  https://developer.apple.com/design/human-interface-guidelines/accessibility
+- W3C. (2023). *Web Content Accessibility Guidelines (WCAG) 2.2*.
+  https://www.w3.org/TR/WCAG22/
+- WHATWG. (s. f.). *HTML Living Standard*, § 7.2.2.1 «The `window.open()`
+  method steps» (con `noopener`, devuelve `null`).
+  https://html.spec.whatwg.org/multipage/nav-history-apis.html#window-open-steps

@@ -1,4 +1,4 @@
-import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
 import { z } from 'npm:zod@4'
 import { allowedOrigins } from './cors.ts'
 import {
@@ -74,7 +74,7 @@ function jsonResponse(
  * sola fila por invocación). Si la base falla, 502 genérico.
  */
 async function checkDailyLimit(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   origin: string | null,
 ): Promise<Response | null> {
   const limit = parseDailyLimit(Deno.env.get('AI_DAILY_LIMIT'))

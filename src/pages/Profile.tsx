@@ -209,7 +209,7 @@ export default function Profile() {
         <p className="mt-4 text-sm">
           <Link
             to="/perfil/acciones"
-            className="font-semibold underline underline-offset-2"
+            className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2"
           >
             {PRIVACY_TEXTS.actionsLinkLabel}
           </Link>
@@ -217,14 +217,17 @@ export default function Profile() {
       </section>
 
       <div className="mt-8 flex flex-wrap gap-4 text-sm">
-        <Link to="/" className="font-semibold underline underline-offset-2">
+        <Link
+          to="/"
+          className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2"
+        >
           Volver al inicio
         </Link>
         <button
           type="button"
           onClick={handleSignOut}
           disabled={signingOut}
-          className="font-semibold underline underline-offset-2 disabled:opacity-50"
+          className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2 disabled:opacity-50"
         >
           {signingOut ? 'Cerrando sesión…' : 'Cerrar sesión'}
         </button>

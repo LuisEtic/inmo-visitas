@@ -61,6 +61,7 @@ import { clientConfig } from '../config/client'
 import { getCrmAdapter } from '../integrations/crm'
 import type { CrmExportResult } from '../integrations/crm/types'
 import { formatPhone, whatsappHref } from '../lib/contact'
+import { openBlankWindow } from '../lib/popup'
 import { useSlowWait } from '../lib/use-slow-wait'
 import type {
   ClientRow,
@@ -958,11 +959,9 @@ function NoteDetailView({ id }: { id: string | undefined }) {
     setCopySummaryNotice(false)
     // WhatsApp (B-8): la ventana se abre ANTES del await, en el gesto
     // del usuario, para que el bloqueador de ventanas no la cierre.
-    // Si la exportación falla o no devuelve enlace, se cierra.
-    const whatsappWindow =
-      clientConfig.crmTarget === 'whatsapp'
-        ? window.open('', '_blank', 'noopener')
-        : null
+    // Si la exportación falla o no devuelve enlace, se cierra. Sin
+    // `'noopener'`: con él no habría ventana (ver `lib/popup.ts`).
+    const whatsappWindow = openBlankWindow(clientConfig.crmTarget === 'whatsapp')
     try {
       const result = await exportToCrm(note.id, clientConfig.crmTarget)
       setExportResult(result)
