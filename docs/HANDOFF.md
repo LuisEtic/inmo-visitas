@@ -2405,3 +2405,56 @@ cuando se hizo la revisión.
 4. **Muse:** desplegar Pages.
 5. Después, Claude cierra la Fase 7 y escribe el prompt de la Fase 8,
    solo cuando Luis lo pida.
+
+### Pasos de cierre tras la revisión (Claude, 2026-11-13)
+
+Luis fusionó el PR #13 (`7f9c71d`) y pidió a Claude los pasos
+siguientes. Hechos con el conector de Supabase (proyecto
+`inmo-visitas-pruebas`, UE) y Git:
+
+1. **0011 aplicada** como SQL directo (igual que 0001–0010; no hay
+   historial de migraciones en Supabase). Comprobado:
+   `crm_exports_guard` contiene `new.created_at := now()`.
+2. **0011 verificada en el proyecto real**, sin dejar datos: insert como
+   Agente A (`role authenticated` + `request.jwt.claims`) de una fila
+   `witei`/`pendiente` con `external_id = 'FALSO-123'`,
+   `error_message`, `exported_at` y `created_at` inventados, dentro de
+   un bloque que se deshace al final. Resultado: `external_id`,
+   `error_message` y `exported_at` en nulo, `created_at` con la hora
+   del momento y estado `pendiente`. Las exportaciones siguen en 3 (las
+   de la prueba de Luis).
+3. **`crm-export` no hacía falta redesplegarlo:** la versión activa (6,
+   `verify_jwt` activado) ya tiene en `mappers.ts` las tres apariciones
+   de `budgetLabel`, igual que `main`.
+4. **Etiqueta del presupuesto con los datos reales** de la nota de
+   ejemplo (los 6 datos no descartados) pasados por el `mappers.ts` de
+   `main`: Inmovilla y Witei pasan su esquema, la etiqueta es
+   «Presupuesto declarado», la línea de la ficha es «- Presupuesto
+   declarado: 230.000 euros» y no aparece «declarado (declarado)». No
+   se ha llamado a la función en vivo porque Claude no tiene la sesión
+   de un agente; la llamada simulada ya la verificó Argo (criterio 5).
+5. **Pages desplegado:** `gh-pages` `7ac0529` (encima de `fa794b3`, sin
+   forzar), con el código de `main` `7f9c71d` y la misma configuración
+   que la build anterior. Esa configuración se comprobó reconstruyendo
+   `59b54a4` hasta obtener el MD5 en vivo anterior
+   (`f2c643807b4aa2ade1cec58310c540da`) y los mismos archivos: clave
+   *publishable*, `VITE_CLIENT_CRM_TARGET=manual`, nombre «Inmo
+   Visitas». MD5 del `index.html` nuevo:
+   `96d5181573ca0769a1398dd1ece37e94`. Claude no puede abrir
+   `github.io` desde su entorno: el despliegue se siguió en GitHub
+   Actions («pages build and deployment»).
+
+**Pendiente solo de Luis:** la prueba rápida en el móvil. Cerrar la PWA
+del todo y reabrirla; en la nota de Ana, Exportar → «Vista previa de la
+ficha» debe decir «Presupuesto declarado: 230.000 euros»; «Copiar
+ficha» → «Exportada: sí» al momento. Con eso, la Fase 7 queda cerrada.
+
+**Prueba de Luis en el móvil (2026-11-13, 10:47):** en la nota aprobada
+de Ana (`e0782f7c…`, 11/11 17:22), «Vista previa de la ficha» muestra
+«Presupuesto declarado» y «Copiar ficha» muestra «Ficha copiada»; la
+base registra la fila `manual`/`nota`/`entregado` a las 10:47:52. El
+paso de «Exportada: no» a «sí» no se pudo ver porque esa nota ya estaba
+exportada (copia de las 9:57); queda cubierto por la prueba de la
+revisión (navegador simulado con la recarga caída). Observación: Ana
+tiene 8 notas con V-18 y solo una aprobada; las otras siete son de
+prueba y se limpiarán antes del piloto. **Fase 7 cerrada.**
