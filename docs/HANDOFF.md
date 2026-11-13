@@ -3283,3 +3283,36 @@ PR: R-4 no cambia el JavaScript de `drafts`.
 - WHATWG. (s. f.). *HTML Living Standard*, § 7.2.2.1 «The `window.open()`
   method steps» (con `noopener`, devuelve `null`).
   https://html.spec.whatwg.org/multipage/nav-history-apis.html#window-open-steps
+
+### Despliegue tras la revisión (Claude, 2026-11-13)
+
+- **Edge Functions**, con el conector de Supabase, desde `main`
+  `e0b4dd6`, con Verify JWT activado y sin los `.test.ts`:
+  - `crm-export` → **versión 12** (API), con `index.ts`, `mappers.ts`,
+    `expiry.ts` y `cors.ts`. Antes había código de la Fase 8, sin
+    `expiry.ts`.
+  - `drafts` → **versión 14** (API), con `index.ts`, `rules.ts`,
+    `cors.ts` y `limit.ts`. Se comprobó leyendo la función desplegada:
+    el código coincide con `main`. Única diferencia de forma: el
+    ` ` de `joinThousands` quedó guardado como el carácter de espacio
+    duro literal, que en una expresión regular de JavaScript es
+    equivalente.
+  - Ojo con la numeración: la API decía `drafts` v13 y `crm-export`
+    v11 antes de este despliegue, y lo anotado en la Fase 8 (v9 y v7)
+    era el sufijo de la ruta interna. A partir de aquí se anotan los
+    números de la API.
+  - `transcribe` (v20) y `extract` (v22) no se tocan.
+- **Pages:** `gh-pages` `815af3f` (encima de `c6f7841`, sin forzar),
+  con el código de `main` `e0b4dd6`. Antes se reprodujo byte a byte
+  la build de `c6f7841` (`d5376ce`, MD5 del índice
+  `6c29fbb85da6e743e2fe0ceef0dba494`, todos los archivos iguales)
+  para fijar la configuración: clave *publishable*,
+  `VITE_CLIENT_PRIMARY_COLOR` vacío, nombre «Inmo Visitas» y base
+  `/inmo-visitas/`. **Diferencia a propósito:**
+  `VITE_CLIENT_CRM_TARGET=whatsapp` (antes `manual`), para que salga
+  «Compartir ficha por WhatsApp» y Luis pueda probar el criterio 8.
+  Tras la prueba, volver a `manual` o dejarlo así: lo decide Luis.
+  MD5 del `index.html` nuevo: `c75c1a2fc0dd51ae4dda24c87f9a88fb`.
+  `github.io` no es accesible desde el entorno de Claude: el
+  despliegue se siguió en GitHub Actions («pages build and
+  deployment»).
