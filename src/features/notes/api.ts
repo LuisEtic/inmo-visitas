@@ -105,7 +105,18 @@ export async function createAudioDraftNote(
   return data
 }
 
-/** Sube el audio grabado a `visit-audio/<agent_id>/<nota>.<ext>`. */
+/**
+ * Sube el audio grabado a `visit-audio/<agent_id>/<nota>.<ext>`.
+ *
+ * Respuesta perdida tras una subida correcta (revisión de Claude de la
+ * Fase 9): si la subida da error, se pregunta a Storage si el objeto ya
+ * está. Si está, la subida anterior llegó aunque su respuesta no, y se
+ * da por subido (sin el error de «ya existe»). Es seguro porque la ruta
+ * es única por nota (una grabación nueva o un cambio de cliente o de
+ * inmueble crean otra nota), solo el propio agente escribe en su
+ * carpeta (0006) y Storage no deja objetos a medias. Si la comprobación
+ * también falla, se lanza el error de siempre.
+ */
 export async function uploadAudio(
   agentId: string,
   noteId: string,
@@ -114,10 +125,20 @@ export async function uploadAudio(
 ): Promise<string> {
   const client = requireSupabase()
   const path = `${agentId}/${noteId}.${extension}`
-  const { error } = await client.storage
-    .from(AUDIO_BUCKET)
-    .upload(path, blob, { contentType: blob.type, upsert: false })
+  const bucket = client.storage.from(AUDIO_BUCKET)
+  const { error } = await bucket.upload(path, blob, {
+    contentType: blob.type,
+    upsert: false,
+  })
   if (error !== null) {
+    try {
+      const { data: alreadyThere } = await bucket.exists(path)
+      if (alreadyThere === true) {
+        return path
+      }
+    } catch {
+      // Sin respuesta tampoco aquí: se informa del fallo de subida.
+    }
     throw new Error(
       'No se ha podido subir el audio. Revisa la conexión y vuelve a intentarlo.',
     )
