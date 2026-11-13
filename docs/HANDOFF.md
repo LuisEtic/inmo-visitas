@@ -2950,3 +2950,119 @@ sin cambios en las Edge Functions).**
 - Luis: activar la protección de contraseñas filtradas en Auth si el
   plan lo permite. La limpieza de datos de prueba sigue esperando su
   «sí».
+### Verificación de criterios por API + push (Argo, 2026-11-13)
+
+- **Push: commit `158a994` «Fase 8: seguridad, borrado y RGPD» +
+  tag `v0.8-fase-8` subidos a main** (token de Luis, askpass borrado
+  tras el uso). Main local = origin/main.
+- **Criterios verificados por API con datos de sacrificio (prefijo
+  F8-, nota de ejemplo de Ana intacta): 25/27 checks PASS** en
+  `/tmp/f8-criteria.py` (script reutilizable; contraseñas solo en
+  argv, nunca guardadas).
+  - **C3 (aprobar nota con audio): PASS** — `audio_url` a null,
+    transcripción intacta, 1 fila `audio_cleanup` razón
+    `nota_aprobada` con la ruta.
+  - **C2 (borrar nota aprobada con audio): PASS** — nota, datos y
+    tareas desaparecen; 1 fila `audit_events` `nota_borrada`. La
+    cola NO duplica el audio (ya se encoló al aprobar) — es lo
+    previsto en el diseño, no un fallo.
+  - **C2b (borrar nota en BORRADOR con audio): PASS** — 1 fila
+    `audio_cleanup` razón `nota_borrada` con la ruta + 1 fila
+    `audit_events` `nota_borrada`.
+  - **C4 (borrar cliente con notas): PASS** — `erase_client` 204,
+    cliente y nota desaparecen, 1 fila `cliente_borrado`; B sobre
+    un cliente de A → 400 `no_encontrado`; B ve 0 filas de A en
+    `audio_cleanup`/`audit_events`/`ai_calls`.
+  - **C5 (borrar datos del propietario): PASS** — `erase_property_owner`
+    204, nombre «Propietario borrado», teléfono null, 1 fila
+    `propietario_borrado`.
+  - **C7 (B-9): PASS** — `external_id` de 201 → 400
+    `crm_exports_external_id_check`; 200 pasa (204).
+  - **C10 (registro solo inserción): PASS** — PATCH a `audit_events`
+    0 filas (acciones sin cambio); DELETE a `ai_calls` 0 filas
+    (conteo igual antes/después).
+  - **C6 (proxy por API): PASS** — notas y exportaciones legibles
+    sin `payload` en el select. El JSON descargado en sí es
+    criterio de navegador (pendiente, criterio 13).
+- **Dos «FAIL» del primer run eran errores del script de prueba, no
+  del producto, y se re-verificaron:**
+  1. La cola `nota_borrada` no existe al borrar una nota ya
+     aprobada (su audio ya estaba encolado como `nota_aprobada`) —
+     comprobado en C2b con nota en borrador: 1 fila.
+  2. El borrado de objeto de Storage en el script usaba el endpoint
+     equivocado (`DELETE /object/<bucket>/<ruta>` → 400); el
+     correcto es `DELETE /object/<bucket>` con
+     `{"prefixes": [...]}`. Con el endpoint correcto los 2 audios
+     de sacrificio se borraron (200) y el bucket quedó sin restos
+     F8. La app usa `storage.remove()` (endpoint correcto), así
+     que `flushAudioCleanup()` no está afectado.
+- **Incidencia de la API de Supabase durante la verificación:**
+  respuestas perdidas (`IncompleteRead`) en sign-in, POST y DELETE
+  aunque la mutación se aplicara. El script reintenta solo los GET
+  y verifica cada mutación con GET antes de reintentar — lección
+  aplicable a futuros scripts de verificación.
+- **Limpieza tras la verificación:** 0 clientes F8, 0 inmuebles
+  F8, 0 audios F8 en el bucket. Queda 1 objeto previo en la carpeta
+  de A (`2f328d2c-…-…​.webm`, anterior a la Fase 8, no tocado) —
+  comprobar a qué nota pertenece antes de decidir nada sobre él.
+- **Pendiente:** criterio 8 (límite diario, necesita las funciones
+  redesplegadas por Luis desde main con `cors.ts`/`limit.ts`),
+  criterio 1 (panel Advisors, dashboard), criterio 6 (JSON
+  descargado) y criterio 13 (navegador a 360 px), Pages con la
+  Fase 8 y revisión de Claude.
+
+### Pages con la Fase 8 (Argo, 2026-11-13)
+
+- Build desde main `158a994` con `VITE_BASE_PATH=/inmo-visitas/`
+  (sin errores; trozo mayor `vendor-react` 255,49 kB) + `404.html`.
+- **gh-pages `a4c272e`** (antes `7ac0529`); **MD5 del `index.html`
+  en vivo `0add8357396e2649cdef5d6a0f25dd33`, idéntico al local**
+  (verificado tras ~80 s). Push con el mismo token que Luis pasó
+  para el commit (askpass borrado tras el uso).
+- Recordatorio: al abrirla, cerrar la pestaña del todo y reabrir
+  (la PWA guarda la versión anterior).
+
+### Criterio 8 verificado: límite diario de IA (Argo, 2026-11-13)
+
+- **Funciones desplegadas por Claude con el conector de Supabase**
+  (no desde el editor del panel), desde main `158a994`, sin
+  `.test.ts`; `rules.ts`/`mappers.ts` re-subidos sin cambios.
+  Verificado por la Management API: **transcribe v16, extract v18,
+  drafts v9, crm-export v7, `verify_jwt: true` en las 4.** Las tres
+  primeras no eran v12/v14/v5 porque el contador ya iba por
+  v15/v17/v8; cada una subió exactamente una versión. Secrets:
+  `AI_DAILY_LIMIT` y `ALLOWED_ORIGINS` sin definir (valores por
+  defecto: 150 usos/día/agente y los 3 orígenes actuales).
+- **Prueba con `AI_DAILY_LIMIT` transitorio** (script en
+  `~/workspace/f8-verification/f8-limit.py`, agente B, datos de
+  sacrificio, nota de ejemplo intacta):
+  - Con límite 2: llamadas **502, 200, 429**. La 1ª dio 502 del
+    proveedor (Gemini, intermitente conocido) y **aun así consumió
+    un uso** (la fila se inserta antes de llamar al proveedor, por
+    diseño). La 3ª: **429 `{"error": "limite_diario_ia",
+    "message": "Has llegado al límite diario de usos de la IA.
+    Vuelve a intentarlo mañana."}`**; `ai_calls` de B quedó en 2 y
+    los datos no cambiaron (la 3ª no re-extrajo).
+  - Con límite 4 (B ya llevaba 3 usos): 200 y **429 de nuevo**,
+    exactamente en el límite.
+  - **Respuesta ya guardada no cuenta:** con el límite agotado,
+    `extract` sobre la nota ya aprobada devuelve **409** («La nota
+    ya está en revisión», mensaje del código desplegado) y
+    `ai_calls` no aumenta — la comprobación de la nota va antes
+    que la del límite.
+  - **Secret al acabar: BORRADO** (DELETE 200 por Management API y
+    comprobado ausente en la lista de secrets). Tras borrarlo, una
+    nota nueva da 200: el límite por defecto (150) está restaurado.
+- **Limpieza:** 0 clientes/inmuebles/notas F8; B tiene 4 filas en
+  `ai_calls` hoy (los 4 usos consumidos; los 429 y el 409 no
+  consumieron nada).
+- **Incidencia del script:** el re-run murió leyendo el cuerpo de
+  un 429 (`IncompleteRead` también en respuestas de error) antes de
+  borrar el secret y los datos; se corrigió el helper
+  (`f8_common.py`: el cuerpo de error perdido devuelve el código
+  sin cuerpo) y se limpió todo a mano. Lección: los scripts de
+  verificación viven en `~/workspace/f8-verification/` (duradero),
+  no en `/tmp` (se borró solo entre sesiones).
+- **Pendiente:** criterio 1 (panel Advisors, dashboard), criterio 6
+  (JSON descargado) y criterio 13 (navegador a 360 px), revisión de
+  Claude.
