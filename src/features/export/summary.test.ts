@@ -108,6 +108,22 @@ describe('buildVisitSummary', () => {
     )
   })
 
+  it('no repite «declarado» si el campo ya lo dice (revisión de la Fase 7)', () => {
+    const { text } = buildVisitSummary(
+      exampleInput({
+        facts: [
+          {
+            category: 'presupuesto',
+            field_name: 'presupuesto_declarado',
+            value: '230.000 euros',
+          },
+        ],
+      }),
+    )
+    expect(text).toContain('- Presupuesto declarado: 230.000 euros')
+    expect(text).not.toContain('(declarado)')
+  })
+
   it('los grupos vacíos no salen y el orden es el de la especificación', () => {
     const { text } = buildVisitSummary(
       exampleInput({

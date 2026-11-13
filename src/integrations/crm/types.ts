@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { CrmTarget } from '../../config/client'
 import type { VisitSummary } from '../../features/export/summary'
+import type { CrmExportRow } from '../../lib/database.types'
 
 /** Destinos de exportación de una nota de visita (tabla `crm_exports`). */
 export const crmTargetSchema = z.enum(['inmovilla', 'witei', 'whatsapp', 'manual'])
@@ -19,6 +20,11 @@ export interface CrmExportResult {
   simulated?: boolean
   /** Enlace a abrir (WhatsApp) cuando la entrega es por enlace. */
   href?: string
+  /**
+   * Fila registrada (`manual` y `whatsapp`), para que la UI la muestre
+   * al momento sin esperar a recargar el historial.
+   */
+  row?: CrmExportRow
   error?: string
 }
 

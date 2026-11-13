@@ -64,6 +64,12 @@ Normas del proyecto. Leer antes de tocar código, junto con
   por Claude con ajustes en las reglas de `drafts` (presupuesto, horas,
   nombres, citas, provisionales) y «Generar borrador». Cerrada el
   2026-11-12 (`drafts` v4 y Pages `1ecc966`).
-- Fase 7 (siguiente, solo cuando Luis lo pida): exportación CRM y WhatsApp
-  (prompt en `docs/prompts/PROMPT-FASE-7.md`).
+- Fase 7: exportación al CRM y WhatsApp (tag `v0.7-fase-7`, migraciones
+  0010 y 0011, Edge Function `crm-export`, formato propio y modo
+  simulado), revisada por Claude con ajustes (0011: el insert no acepta
+  campos de cierre del navegador; «Presupuesto declarado» sin repetir;
+  «Exportada» al momento). Se cierra tras aplicar la 0011, redesplegar
+  `crm-export` v2 y Pages.
+- Fase 8 (siguiente, solo cuando Luis lo pida): seguridad, RLS completa
+  y RGPD.
 - Cada pantalla se prueba en el navegador, no solo por API.
