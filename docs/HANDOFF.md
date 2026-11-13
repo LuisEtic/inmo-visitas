@@ -2269,3 +2269,65 @@ aplanan en una lista. El contenido es el mismo.)
   exportaciones) para la prueba de Luis en el navegador.
 - **Pendiente:** navegador a 360 px (criterios 1, 8 y 10) y
   despliegue en Pages (falta el token).
+
+### Comprobación en Pages sin sesión (Argo, 2026-11-12)
+
+- Navegador en la nube sobre Pages (`fa794b3`): etiqueta
+  «inmo-visitas · Fase 7» en vivo. La primera carga mostró la
+  versión vieja («Fase 6») por la caché de la PWA; cerrando la
+  pestaña del todo y reabriendo salió la Fase 7 (y se mantuvo al
+  recargar).
+- `/notas` y `/pendientes` sin sesión redirigen a `/login`
+  (correcto). Sin errores de consola ni cargas fallidas, sin
+  desbordamiento a ancho de escritorio (1919 px).
+- **Sin verificar:** el ancho exacto de 360 px (el navegador en la
+  nube no permite fijarlo) y el texto de la portada con sesión
+  (la raíz redirige a `/login` sin sesión). Queda para la prueba
+  de Luis en el móvil.
+
+### Comprobación con sesión vía extensión de Chrome (Argo, 2026-11-13)
+
+- Luis instaló la extensión de Muse para Chrome; Argo ve su
+  Chrome y la pestaña de la app.
+- Sesión iniciada como Agente A Prueba en la portada: etiqueta
+  «inmo-visitas · Fase 7», pie «Fase 7 — Exportación al CRM y
+  WhatsApp.», navegación con «Pendientes (1)».
+- Pendiente: criterios 1, 8 y 10 con sesión (Seguimiento /
+  WhatsApp / Exportar / Por exportar), en el Chrome de Luis o
+  en su móvil a 360 px.
+
+### Prueba en navegador con sesión (Argo, en el Chrome de Luis, 2026-11-13)
+
+Criterios 1, 8 y 10 — TODO CORRECTO, con 3 matices:
+
+- PASO 1: /pendientes mostraba «Por exportar (1)» con Ana García
+  V-18 · Aprobada · 11 nov 2026 (antes de exportar).
+- PASO 2: en la nota, los dos borradores aprobados muestran
+  «Copiar» y «Abrir en WhatsApp». El enlace del comprador es
+  wa.me/34612345678 con el borrador completo como texto; el del
+  propietario es wa.me/34611100200 con su borrador, SIN «Ana»,
+  SIN «230.000», SIN «presupuesto» y sin ficha. Tras cada
+  apertura: «Abierto en WhatsApp el 13 nov 2026, 9:56» en ambas
+  tarjetas. Sin pulsar Enviar.
+- PASO 3: vista previa de la ficha correcta (grupos, presupuesto,
+  cita, tarea pendiente; sin transcripción, citas, audio ni
+  descartados). «Copiar ficha» → «Ficha copiada». Historial
+  «Exportaciones (3)»: Manual · Ficha 9:57 + WhatsApp comprador
+  9:56 + WhatsApp propietario 9:56. Métricas: «Exportada: sí ·
+  WhatsApp abierto: comprador sí, propietario sí».
+- PASO 4: «Por exportar» desaparece de /pendientes y /notas
+  muestra «Seguimiento: preparado · Exportada».
+
+MATICES:
+1. Ancho 360 px NO probado: el navegador no permite fijar el
+   ancho de ventana; la prueba se hizo a 1041 px, sin
+   desbordamiento horizontal.
+2. wa.me BLOQUEADO en el Chrome de Luis por una extensión
+   (ERR_BLOCKED_BY_CLIENT): el clic registró la apertura en la
+   app pero no abrió la pantalla de chat de WhatsApp; número y
+   texto se verificaron en la propia URL wa.me del botón, no en
+   la pantalla de WhatsApp. En el móvil debería abrir bien.
+3. La ficha sigue diciendo «Presupuesto declarado (declarado):
+   230.000 euros» (redundancia conocida, pulido Fase 9).
+4. La métrica «Exportada» tardó una vista en pasar a «sí» tras
+   copiar la ficha (estado final correcto).
