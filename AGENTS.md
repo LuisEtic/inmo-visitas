@@ -78,7 +78,7 @@ Normas del proyecto. Leer antes de tocar código, junto con
 - Fase 9: pulido, móvil y resiliencia (tag `v0.9-fase-9`, sin
   migración), revisada por Claude con ajustes (B-8 con la ventana
   abierta sin `noopener`, subida con respuesta perdida, zonas táctiles
-  del perfil). Última fase del MVP. Desplegada (`drafts` v14,
-  `crm-export` v12, Pages `815af3f`). Pendiente: prueba de Luis en el
-  móvil.
+  del perfil). Última fase del MVP. Cerrada el 2026-11-13 (`drafts`
+  v14, `crm-export` v12, Pages `815af3f`; criterios en Android y PWA
+  instalada; Safari de iPhone queda para el piloto).
 - Cada pantalla se prueba en el navegador, no solo por API.

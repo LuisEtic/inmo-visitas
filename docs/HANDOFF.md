@@ -3316,3 +3316,18 @@ PR: R-4 no cambia el JavaScript de `drafts`.
   `github.io` no es accesible desde el entorno de Claude: el
   despliegue se siguió en GitHub Actions («pages build and
   deployment»).
+
+### Prueba de Luis en el móvil y cierre (2026-11-13)
+
+- Android, Chrome 157, Pages `815af3f` (destino `whatsapp`), con datos
+  de sacrificio: **criterios 1, 2, 3, 4, 5 y 8 OK**. El 5 se comprobó en
+  una nota con «Cita pendiente – Para la próxima semana»: aceptar los
+  datos, «Aprobar nota» y «Preparar seguimiento» → tarea «Confirmar día
+  y hora: …».
+- **PWA instalada** desde el menú de Chrome → «Instalar» (no «Crear
+  acceso directo»): icono «Inmo Visitas» y apertura a pantalla
+  completa.
+- **Safari de iPhone sin probar** (Luis no tiene iPhone). Decisión de
+  Luis: **opción (a)**, se prueba en el piloto con el primer agente que
+  tenga iPhone; queda como riesgo abierto en `docs/ESTADO.md`.
+- **Fase 9 cerrada.**
