@@ -148,9 +148,19 @@ const dueDateFormatter = new Intl.DateTimeFormat('es-ES', {
   timeZone: 'Europe/Madrid',
 })
 
+/**
+ * Etiqueta de un dato de presupuesto: siempre «declarado», sin
+ * repetirlo si el nombre del campo ya lo dice (`presupuesto_declarado`
+ * → «Presupuesto declarado», no «Presupuesto declarado (declarado)»).
+ */
+function budgetLabel(label: string): string {
+  return /declarad/i.test(label) ? label : `${label} (declarado)`
+}
+
 function factLine(fact: VisitSummaryFactJson): string {
-  const declared = fact.category === 'presupuesto' ? ' (declarado)' : ''
-  return `- ${fact.label}${declared}: ${fact.value}`
+  const label =
+    fact.category === 'presupuesto' ? budgetLabel(fact.label) : fact.label
+  return `- ${label}: ${fact.value}`
 }
 
 function taskLine(task: SummaryTaskInput): string {
@@ -327,7 +337,7 @@ function summaryFacts(json: VisitSummaryJson): VisitSummaryFactJson[] {
   return json.groups.flatMap((group) =>
     group.facts.map((fact) =>
       fact.category === 'presupuesto'
-        ? { ...fact, label: `${fact.label} (declarado)` }
+        ? { ...fact, label: budgetLabel(fact.label) }
         : fact,
     ),
   )

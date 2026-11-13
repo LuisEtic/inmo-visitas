@@ -2331,3 +2331,77 @@ MATICES:
    230.000 euros» (redundancia conocida, pulido Fase 9).
 4. La métrica «Exportada» tardó una vista en pasar a «sí» tras
    copiar la ficha (estado final correcto).
+
+## Revisión de la Fase 7 (Claude, 2026-11-13)
+
+**Resultado: OK con ajustes.** Revisado `f84db0e..76f9ece` (código de
+`733df3a`, etiqueta `v0.7-fase-7`) contra `PROMPT-FASE-7.md` y este
+HANDOFF. El commit de docs `59b54a4` de Argo no estaba en `origin`
+cuando se hizo la revisión.
+
+**Lo que funciona (comprobado por Claude):**
+
+| Comprobación | Resultado |
+|---|---|
+| `npm ci`, `tsc --noEmit`, `npm run build` (`/` y `/inmo-visitas/`), lint | OK; lint 0 errores + 2 avisos de shadcn; trozo mayor 255.497 B |
+| `npm test` | 185/185 → **187/187** con los tests de este PR |
+| `deno check` de `crm-export` (y de `drafts`) | OK (Deno 2.9.6) |
+| 0001–0010 en PostgreSQL 16 con `auth`/`storage` simulados; 0010 reaplicada | OK, idempotente; `0010` = `docs/deploy/supabase-fase-7.sql` |
+| Guard de `crm_exports` y RLS como agentes A y B, y como `anon` | 14/14: borrador sin aprobar → `borrador_no_aprobado`; nota sin aprobar → `nota_no_aprobada`; borrar una fila → `exportacion_cerrada`; B no ve ni cambia filas de A y su insert falla (`nota_no_aprobada`, porque RLS le oculta la nota); `anon` no ve nada; borrar la nota entera borra sus exportaciones (cascada RGPD) |
+| `crm-export` | Solo clave anon + JWT; 404/409/401 como pide el prompt; simulado sin red; `Idempotency-Key`, HMAC, 15 s y un reintento; sin *payload* ni respuesta del CRM en logs ni errores |
+| Minimización | Ni la ficha ni los dos formatos llevan transcripción, texto de la nota, audio, citas, datos descartados ni borradores; al propietario solo va su borrador |
+| Navegador (Chromium a **360 px**, Supabase simulado, build de `main` + este PR) | 16/16: «Por exportar (1)» en `/pendientes`; dos «Abrir en WhatsApp» (comprador `wa.me/34612345678`, borrador entero con `&` y `?` bien codificados; propietario `wa.me/34611100200`, sin Ana, presupuesto ni ficha); «Abierto en WhatsApp el …» y fila registrada; vista previa y portapapeles con la ficha; tras «Copiar ficha», `/pendientes` sin «Por exportar» y `/notas` con «Exportada»; sin desbordamiento en `/pendientes`, `/notas/:id` y `/notas`; sin errores de consola. Cubre el «360 px» que no se pudo probar en el Chrome de Luis |
+
+**Ajustes de este PR:**
+
+- **M-1 · Migración 0011** (`0011_ajustes_revision_fase_7.sql`, copia en
+  `docs/deploy/supabase-fase-7-ajustes.sql`): en el insert, el guard
+  fija `external_id` y `error_message` a nulo, `exported_at` a nulo (o
+  `now()` si nace `entregado`) y `created_at := now()`. Antes, una
+  llamada directa a la API podía crear una fila con un ID externo o una
+  fecha de exportación inventados. Probado en PostgreSQL (14/14 + 2
+  casos nuevos) y reaplicado sin errores.
+- **M-2 · «Presupuesto declarado (declarado)»:** `budgetLabel` en
+  `summary.ts` y en `mappers.ts` solo añade «(declarado)» si la etiqueta
+  no lo dice ya. Los tests usaban el campo `presupuesto` y no el real
+  (`presupuesto_declarado`), por eso no lo vieron; hay 2 tests nuevos con
+  el campo real. Cambia la ficha y el *payload* de los dos CRM, así que
+  **hay que redesplegar `crm-export`**.
+- **M-3 · «Exportada» que tardaba una vista:** «Copiar ficha» (y
+  compartir por WhatsApp) solo actualizaba la pantalla al recargar el
+  historial, y si esa recarga fallaba se quedaba en «no». Ahora los
+  adaptadores `manual` y `whatsapp` devuelven la fila (`row` en
+  `CrmExportResult`) y `NoteDetail` la muestra al momento. Comprobado en
+  el navegador con la recarga caída: sin el ajuste falla y con él pasa.
+
+**Aplazados (baja; Fase 8 o pulido):**
+
+- B-6 (Fase 8): un agente puede pasar su propia fila de `pendiente` a
+  `enviado` con un PATCH directo, porque `crm-export` usa su JWT. Solo
+  afecta a sus métricas. Arreglo: una función `security definer` o un
+  rol de servidor para cerrar la exportación.
+- B-7: si `crm-export` se corta entre el insert y el cierre, la fila se
+  queda en `pendiente` («En curso») para siempre. Reintentar funciona
+  (fila nueva). Valorar marcar como `error` las `pendiente` antiguas.
+- B-8: con `VITE_CLIENT_CRM_TARGET=whatsapp`, la ficha se abre con
+  `window.open` después de un `await`, y Safari en iOS puede
+  bloquearlo; queda el enlace de respaldo en pantalla.
+- B-9 (Fase 8): CORS de las cuatro funciones con `luisetic.github.io`
+  escrito en el código; habrá que sacarlo a configuración al pasar a
+  Coolify. `external_id` del CRM sin límite de longitud.
+- Siguen aplazados B-1 a B-5 de la Fase 6.
+
+**Pendiente para cerrar la Fase 7 (tras fusionar este PR):**
+
+1. **Argo** (o Luis en el SQL Editor): aplicar
+   `docs/deploy/supabase-fase-7-ajustes.sql` y comprobar que
+   `crm_exports_guard` contiene `new.created_at := now()`.
+2. **Luis:** redesplegar `crm-export` (v2) pegando `index.ts` y
+   `mappers.ts` desde `main`. Comprobar en el editor que `mappers.ts`
+   tiene `budgetLabel`.
+3. **Argo:** una exportación simulada por API con una nota de
+   sacrificio: la etiqueta debe ser «Presupuesto declarado» y el
+   `external_id` debe ser `SIM-…`.
+4. **Muse:** desplegar Pages.
+5. Después, Claude cierra la Fase 7 y escribe el prompt de la Fase 8,
+   solo cuando Luis lo pida.

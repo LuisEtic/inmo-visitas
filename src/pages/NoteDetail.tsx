@@ -277,6 +277,22 @@ function NoteDetailView({ id }: { id: string | undefined }) {
     }
   }
 
+  /**
+   * Muestra al momento la fila que acaba de registrar un adaptador
+   * (`manual` o `whatsapp`), para que «Exportada» y el historial no
+   * esperen a la recarga (revisión de la Fase 7).
+   */
+  function showRecordedExport(row: CrmExportRow | undefined) {
+    if (row === undefined) {
+      return
+    }
+    setExports((previous) =>
+      previous === null
+        ? [row]
+        : [row, ...previous.filter((item) => item.id !== row.id)],
+    )
+  }
+
   async function refreshExports() {
     if (note === null) {
       return
@@ -911,6 +927,7 @@ function NoteDetailView({ id }: { id: string | undefined }) {
         setExportSharedHref(result.href)
         window.open(result.href, '_blank', 'noopener')
       }
+      showRecordedExport(result.row)
       await refreshExports()
     } catch (error: unknown) {
       setExportError(
@@ -935,6 +952,7 @@ function NoteDetailView({ id }: { id: string | undefined }) {
       const result = await exportToCrm(note.id, 'manual')
       if (result.ok) {
         setCopySummaryNotice(true)
+        showRecordedExport(result.row)
         await refreshExports()
       } else {
         // La ficha no se pudo copiar: se muestra para copiarla a mano.

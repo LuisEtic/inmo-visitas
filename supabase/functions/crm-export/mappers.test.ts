@@ -121,6 +121,25 @@ describe('mapToInmovilla', () => {
     expect(budget?.value).toBe('230.000 euros')
   })
 
+  it('no repite «declarado» si el campo ya lo dice (revisión de la Fase 7)', () => {
+    const summary = buildSummary({
+      ...INPUT,
+      facts: [
+        {
+          category: 'presupuesto',
+          field_name: 'presupuesto_declarado',
+          value: '230.000 euros',
+        },
+      ],
+    })
+    const inmovilla = mapToInmovilla(summary)
+    const witei = mapToWitei(summary)
+    expect(inmovilla.datos[0]?.label).toBe('Presupuesto declarado')
+    expect(witei.facts[0]?.label).toBe('Presupuesto declarado')
+    expect(inmovilla.comentarios).toContain('- Presupuesto declarado: 230.000 euros')
+    expect(inmovilla.comentarios).not.toContain('(declarado)')
+  })
+
   it('un payload incompleto no pasa el esquema', () => {
     const payload = mapToInmovilla(buildSummary(INPUT))
     const { referencia: _removed, ...withoutReference } = payload

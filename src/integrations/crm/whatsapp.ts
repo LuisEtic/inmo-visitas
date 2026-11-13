@@ -20,7 +20,7 @@ export const whatsappAdapter: CrmAdapter = {
         target: 'whatsapp',
         kind: 'nota',
       })
-      return { ok: true, status: 'entregado', exportId: row.id, href }
+      return { ok: true, status: 'entregado', exportId: row.id, row, href }
     } catch (error: unknown) {
       return {
         ok: false,

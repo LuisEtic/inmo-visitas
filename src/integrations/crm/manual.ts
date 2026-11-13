@@ -27,7 +27,7 @@ export const manualAdapter: CrmAdapter = {
         target: 'manual',
         kind: 'nota',
       })
-      return { ok: true, status: 'entregado', exportId: row.id }
+      return { ok: true, status: 'entregado', exportId: row.id, row }
     } catch (error: unknown) {
       return {
         ok: false,
