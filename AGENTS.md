@@ -73,8 +73,8 @@ Normas del proyecto. Leer antes de tocar código, junto con
 - Fase 8: seguridad, borrado y RGPD (tag `v0.8-fase-8`, migración
   0012, CORS configurable y límite diario de IA en las Edge Functions),
   revisada por Claude con ajustes (cola de audios, confirmación por
-  nombre, descarga en iPhone). Pendiente de cerrar: Pages desde `main`
-  y prueba de Luis en el móvil.
+  nombre, descarga en iPhone). Cerrada el 2026-11-13 (PR #17, Pages
+  `184e5f9`, prueba de Luis en Android).
 - Fase 9 (siguiente, solo cuando Luis lo pida): pulido, móvil y
   resiliencia (`docs/prompts/PROMPT-FASE-9.md`).
 - Cada pantalla se prueba en el navegador, no solo por API.
