@@ -59,7 +59,7 @@ export async function createClient(values: ClientFormValues): Promise<ClientRow>
     .select()
     .single()
   if (error !== null) {
-    throw new Error(translateDbError(error))
+    throw new Error(translateDbError(error, { contact: true }))
   }
   return data
 }
@@ -73,15 +73,11 @@ export async function updateClient(id: string, values: ClientFormValues): Promis
     .select()
     .single()
   if (error !== null) {
-    throw new Error(translateDbError(error))
+    throw new Error(translateDbError(error, { contact: true }))
   }
   return data
 }
 
-export async function removeClient(id: string): Promise<void> {
-  const client = requireSupabase()
-  const { error } = await client.from('clients').delete().eq('id', id)
-  if (error !== null) {
-    throw new Error(translateDbError(error))
-  }
-}
+// Borrar un cliente es `eraseClient` (features/privacy/api.ts): borra
+// sus notas con todo lo que cuelga de ellas y registra
+// `cliente_borrado`. No hay borrado directo desde aquí (Fase 8).

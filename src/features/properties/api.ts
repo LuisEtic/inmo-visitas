@@ -71,7 +71,7 @@ export async function createProperty(values: PropertyFormValues): Promise<Proper
     .select()
     .single()
   if (error !== null) {
-    throw new Error(translateDbError(error, { reference: values.reference }))
+    throw new Error(translateDbError(error, { reference: values.reference, contact: true }))
   }
   return data
 }
@@ -88,7 +88,7 @@ export async function updateProperty(
     .select()
     .single()
   if (error !== null) {
-    throw new Error(translateDbError(error, { reference: values.reference }))
+    throw new Error(translateDbError(error, { reference: values.reference, contact: true }))
   }
   return data
 }

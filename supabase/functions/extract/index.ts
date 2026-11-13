@@ -1,5 +1,11 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { z } from 'npm:zod@4'
+import { allowedOrigins } from './cors.ts'
+import {
+  DAILY_LIMIT_MESSAGE,
+  madridDayStart,
+  parseDailyLimit,
+} from './limit.ts'
 import { applyExtractionRules, parseModelResponse } from './rules.ts'
 
 /**
@@ -26,11 +32,11 @@ import { applyExtractionRules, parseModelResponse } from './rules.ts'
  *   respuesta del modelo ni la clave.
  */
 
-const ALLOWED_ORIGINS = new Set([
-  'http://localhost:5173',
-  'http://localhost:4173',
-  'https://luisetic.github.io',
-])
+/**
+ * Orígenes CORS (Fase 8, B-9): salen del secret `ALLOWED_ORIGINS`
+ * (lista separada por comas); si falta, los tres actuales.
+ */
+const ALLOWED_ORIGINS = allowedOrigins((name) => Deno.env.get(name))
 
 const ALLOWED_HEADERS = 'authorization, x-client-info, apikey, content-type'
 
@@ -83,6 +89,44 @@ function jsonResponse(
       'Content-Type': 'application/json',
     },
   })
+}
+
+/**
+ * Límite diario de IA (Fase 8): cuenta las filas de `ai_calls` de
+ * este agente desde las 00:00 de Europe/Madrid; si llega al límite
+ * (secret `AI_DAILY_LIMIT`, 150 por defecto), devuelve la respuesta
+ * 429 y no llama al proveedor. Si no, inserta su fila y sigue. Los
+ * reintentos internos de una misma llamada cuentan como una (una
+ * sola fila por invocación). Si la base falla, 502 genérico.
+ */
+async function checkDailyLimit(
+  supabase: ReturnType<typeof createClient>,
+  origin: string | null,
+): Promise<Response | null> {
+  const limit = parseDailyLimit(Deno.env.get('AI_DAILY_LIMIT'))
+  const dayStart = madridDayStart(new Date())
+  const { count, error } = await supabase
+    .from('ai_calls')
+    .select('id', { count: 'exact', head: true })
+    .eq('fn', 'extract')
+    .gte('created_at', dayStart.toISOString())
+  if (error !== null) {
+    return jsonResponse({ error: EXTRACT_ERROR }, 502, origin)
+  }
+  if ((count ?? 0) >= limit) {
+    return jsonResponse(
+      { error: 'limite_diario_ia', message: DAILY_LIMIT_MESSAGE },
+      429,
+      origin,
+    )
+  }
+  const { error: insertError } = await supabase
+    .from('ai_calls')
+    .insert({ fn: 'extract' })
+  if (insertError !== null) {
+    return jsonResponse({ error: EXTRACT_ERROR }, 502, origin)
+  }
+  return null
 }
 
 Deno.serve(async (req: Request) => {
@@ -161,6 +205,12 @@ Deno.serve(async (req: Request) => {
   const sourceText = (note.transcript ?? note.raw_text ?? '').trim()
   if (sourceText === '') {
     return jsonResponse({ error: 'La nota no tiene texto para extraer' }, 400, origin)
+  }
+
+  // 3b. Límite diario de IA (Fase 8): antes de llamar al proveedor.
+  const limitResponse = await checkDailyLimit(supabase, origin)
+  if (limitResponse !== null) {
+    return limitResponse
   }
 
   // 4. Llamar al proveedor (API de chat compatible con OpenAI).

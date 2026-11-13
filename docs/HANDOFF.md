@@ -245,7 +245,7 @@ Historial de entregas por fase. Un bloque por fase, en orden.
     `tasks` con `visit_note_id` null. El agente A crea `visit_notes`
     propias y edita su perfil (full_name y phone). Incidencia en la
     primera pasada (7/11): una cuenta fantasma de prueba creada antes
-    por Argo (`inmovisitas.prueba.a@gmail.com`) había reclamado los
+    por Argo (`<email-prueba-fantasma>`) había reclamado los
     datos de demo al ser el primer agente; se limpió (borrado de las 3
     cuentas/agentes y `agent_id` a null) y se repitió la prueba con A
     creado primero y B después: 15/16. Prueba de interfaz en la web
@@ -255,7 +255,7 @@ Historial de entregas por fase. Un bloque por fase, en orden.
     restauración del nombre original), /design-system pública sin
     sesión, y cierre de sesión con vuelta a /login y /perfil
     redirigiendo a /login. Incidencia menor: el primer intento de
-    login usó por error el login guardado de pluton2408@hotmail.com
+    login usó por error el login guardado de <email-luis>
     (sin «+agente-a») y dio «Credenciales incorrectas»; con las
     credenciales exactas de la cuenta de prueba entró sin problema.
     El único check que falta es el enlace mágico (ver punto siguiente).
@@ -465,7 +465,7 @@ Cambios (aprobados por Luis: puntos 2, 4, 5, 6 y 7 de la revisión):
     borrado en cascada.
 - Cómo probarlo (en vivo contra el proyecto de pruebas, 2026-11-11,
   con la clave anon; agentes de prueba
-  pluton2408+agente-a@hotmail.com y pluton2408+agente-b@hotmail.com;
+  <email-agente-a> y <email-agente-b>;
   las contraseñas NO se escriben aquí, como en la Fase 2):
   - Criterio 1 ✅: A ve 6 clientes + 8 inmuebles; crea a Irene Castro
     Vidal (teléfono `612.34.56.78` → guardado `+34612345678`,
@@ -681,7 +681,7 @@ Cambios (aprobados por Luis el 2026-11-11):
     `jsr:@supabase/supabase-js@2`, `npm:zod@4`).
 - Cómo probarlo (en vivo contra el proyecto de pruebas, 2026-11-11,
   con la clave anon; agentes de prueba
-  pluton2408+agente-a@hotmail.com y pluton2408+agente-b@hotmail.com;
+  <email-agente-a> y <email-agente-b>;
   las contraseñas NO se escriben aquí, como en la Fase 2):
   - **Hecho por Luis el 2026-11-11:** `docs/deploy/supabase-fase-4.sql`
     aplicado en el SQL Editor (Success) y `transcribe` desplegada
@@ -2458,3 +2458,392 @@ exportada (copia de las 9:57); queda cubierto por la prueba de la
 revisión (navegador simulado con la recarga caída). Observación: Ana
 tiene 8 notas con V-18 y solo una aprobada; las otras siete son de
 prueba y se limpiarán antes del piloto. **Fase 7 cerrada.**
+
+---
+
+## HANDOFF FASE 8 — Seguridad, borrado y RGPD (2026-11-13, sin commit, tag ni push: lo hace Argo tras verificar)
+
+### Hecho
+
+- **Migración 0012** (`supabase/migrations/0012_seguridad_rgpd.sql`) + copia
+  idéntica en `docs/deploy/supabase-fase-8.sql` (verificado byte a byte con
+  `cmp`). **No se ha aplicado al proyecto real** (ref `gwsgtwkrotlljybnkpxg`):
+  se probó en un clúster PostgreSQL 16 temporal local (`/tmp/pg-fase8`,
+  con esquemas `auth`/`storage` simulados), aplicando las migraciones
+  0001–0012 en orden. Argo la aplica después por la Management API.
+- **Borrado desde la app:** borrar nota, borrar cliente con todas sus
+  notas, borrar datos del propietario; entrega de datos del cliente en
+  JSON; audio borrado al aprobar la nota; cola `audio_cleanup` vaciada por
+  `flushAudioCleanup()` en el navegador (al entrar y al aprobar/borrar).
+- **Límite diario de IA** (150/día/agente, `AI_DAILY_LIMIT`) y **CORS
+  configurable** (`ALLOWED_ORIGINS`) en las cuatro Edge Functions.
+- **Sección «Privacidad»** en `/perfil` + página `/perfil/acciones` con el
+  registro de acciones.
+- **Docs RGPD** en `docs/rgpd/` (4 borradores) y **script de limpieza de
+  datos de prueba** en `docs/deploy/limpieza-pruebas.sql` (**no ejecutado**;
+  solo con el «sí» por escrito de Luis, que no lo ha dado).
+- **Limpieza del repo:** los emails reales de prueba en este HANDOFF se
+  sustituyeron por `<email-agente-a>`, `<email-agente-b>`,
+  `<email-luis>` y `<email-prueba-fantasma>` (cuenta fantasma). Quedan los
+  ficticios de semilla (`ana.garcia@gmail.com`) y los `example.com`: son
+  datos de prueba por diseño, no cuentas reales. **Los emails reales
+  siguen en el historial de git**; reescribirlo es decisión de Luis.
+- `APP_PHASE_LABEL = 'inmo-visitas · Fase 8'`; Home: «Fase 8 — Seguridad,
+  borrado y RGPD».
+- **Nada de la nota de ejemplo de Ana García + V-18
+  (`e0782f7c-8409-4e23-a2b0-5972521fed0a`) se tocó**: ni la nota, ni sus
+  borradores aprobados, ni sus exportaciones. Todas las pruebas de
+  borrado se hicieron con datos de sacrificio en local.
+
+### Tablas / columnas / triggers / funciones / políticas (solo la 0012)
+
+- `alter function … set search_path = public, pg_temp` en las 6 guardas
+  (`visit_notes_guard`, `visit_notes_insert_guard`,
+  `extracted_facts_guard`, `tasks_guard`, `drafts_guard`,
+  `crm_exports_guard`) y además en `handle_new_agent`,
+  `erase_client`, `erase_property_owner` y `visit_notes_delete_cleanup`.
+- `revoke execute` de `handle_new_agent()` y `rls_auto_enable()` a
+  `public, anon, authenticated` (los triggers siguen funcionando).
+- `handle_new_agent()` redefinida sin el bloque «SOLO DEMO» (solo crea
+  la fila de `agents`); `drop table public.demo_seed_claim`.
+- **B-4:** `tasks_guard` y `drafts_guard` reescritas enteras (copia de la
+  0009) + comprobación `cambio_no_permitido` al cambiar `visit_note_id`,
+  `origin` (tareas) o `audience` (borradores) en un `update`.
+- **B-9:** `check (char_length(external_id) <= 200)` en `crm_exports`.
+- **B-6 aceptado y documentado** (ver `docs/rgpd/riesgos.md`): un agente
+  puede pasar su propia exportación de `pendiente` a `enviado` con un
+  PATCH directo; cerrarlo exigiría `service_role` en `crm-export`.
+- **Nuevas tablas (RLS activado, solo propias):** `audio_cleanup`
+  (`id, agent_id, path, reason nota_aprobada/nota_borrada`, select/insert/
+  delete propias, sin update), `audit_events` (`id, agent_id, action
+  nota_borrada/cliente_borrado/propietario_borrado/datos_entregados,
+  entity_id, created_at`, select/insert propias, sin update/delete),
+  `ai_calls` (`id, agent_id, fn transcribe/extract/drafts, created_at`,
+  select/insert propias, sin update/delete).
+- **Audio al aprobar:** `visit_notes_guard` (copia entera de la 0008)
+  encola la ruta como `nota_aprobada` y pone `audio_url := null` al
+  pasar a `approved` (solo si la nota tenía audio).
+- **Trigger `visit_notes_delete_cleanup`** (before delete): encola el
+  audio como `nota_borrada` (si lo tenía) e inserta `audit_events`
+  `nota_borrada`.
+- **Funciones `security invoker`** (todo pasa por RLS):
+  `erase_client(uuid)` (borra las notas del cliente —en cascada sus
+  datos, tareas, borradores y exportaciones—, borra el cliente e
+  inserta `cliente_borrado`; cliente de otro agente → `no_encontrado`)
+  y `erase_property_owner(uuid)` (nombre → «Propietario borrado»,
+  teléfono → null, inserta `propietario_borrado`). Grants solo a
+  `authenticated`.
+- **Contacto en la base:** normalización previa (`regexp_replace` quita
+  espacios, puntos, guiones y paréntesis; email a minúsculas sin
+  espacios) con bloque DO que aborta con recuentos si alguna fila no
+  queda válida; después, checks `clients_phone_format_check`,
+  `properties_owner_phone_format_check` (`^\+[1-9][0-9]{7,14}$`) y
+  `clients_email_format_check`. Los teléfonos semilla quedaron
+  normalizados (`+34612345678`, `+34611100200`).
+- **Migraciones 0001–0011 sin tocar.** Ninguna otra tabla/trigger/
+  función/política cambió.
+
+### Advisors de seguridad (antes / después)
+
+- **No se pudo comprobar el panel de Advisors en local**: es una
+  función del panel de Supabase y no existe en PostgreSQL pelado. Lo
+  que se comprobó en local es la condición que hay detrás de cada
+  aviso (ver «Prueba local» abajo); el panel se revisa al aplicar la
+  0012 en el proyecto real.
+- **Antes** (avisos que motivan la fase, según el prompt): `search_path`
+  mutable en las 6 guardas; `handle_new_agent()` y `rls_auto_enable()`
+  ejecutables por `anon`/`authenticated`; `demo_seed_claim` con RLS y
+  sin políticas; `external_id` sin límite; `tasks`/`drafts` sin
+  protección B-4; sin límite de IA ni CORS configurable. La protección
+  de contraseñas filtradas desactivada es un **ajuste de Auth, no de
+  esta fase**: no se tocó.
+- **Después (verificado en local):** `proconfig = search_path=public,
+  pg_temp` en las 6 guardas + `handle_new_agent` + las 3 funciones
+  nuevas; `has_function_privilege(anon/authenticated, …) = false` en
+  `handle_new_agent()` y `rls_auto_enable()`; `demo_seed_claim` no
+  existe; RLS activado en `audio_cleanup` (3 políticas), `audit_events`
+  (2) y `ai_calls` (2); B-4, B-9 y contacto verificados con pruebas
+  negativas (abajo).
+
+### Edge Functions cambiadas (NO redesplegadas)
+
+- **Las cuatro cambian y hay que redesplegarlas a mano (clic de Luis en
+  el panel; no hay API de despliegue).** `index.ts` + archivos nuevos:
+  `cors.ts` en las cuatro, `limit.ts` en `transcribe`, `extract` y
+  `drafts`. Al redeplegar, pegar el `index.ts` actualizado y **añadir
+  los archivos nuevos con esos mismos nombres** (`./cors.ts`,
+  `./limit.ts`); los *secrets* de proveedor no cambian.
+- **`transcribe` (v12 local):** CORS desde `ALLOWED_ORIGINS` + límite
+  diario antes de llamar al proveedor (después de la descarga del
+  audio y de la respuesta ya transcrita, que no consume uso).
+- **`extract` (v14 local):** CORS + límite diario antes de llamar al
+  proveedor (después de comprobar que hay texto fuente).
+- **`drafts` (v5 local):** CORS + límite diario antes de llamar al
+  proveedor (después de la configuración del proveedor). Una
+  invocación = un uso aunque genere los dos borradores o reintente.
+- **`crm-export`:** solo CORS (no es función de IA: sin límite).
+- **429 del límite:** `{ "error": "limite_diario_ia", "message": "Has
+  llegado al límite diario de usos de la IA. Vuelve a intentarlo
+  mañana." }`. Si la base falla al contar/insertar `ai_calls`, 502
+  genérico de cada función (no 429).
+- **Nuevos *secrets* (opcionales en pruebas; sin crearlos, todo sigue
+  igual):** `ALLOWED_ORIGINS` (lista separada por comas; por defecto
+  `http://localhost:5173`, `http://localhost:4173`,
+  `https://luisetic.github.io`) y `AI_DAILY_LIMIT` (entero ≥ 1; por
+  defecto 150). Documentados en `supabase/functions/README.md`.
+- **Lógica de transcripción, extracción, borradores y exportación sin
+  tocar**, salvo CORS y el límite añadidos delante.
+
+### Rutas / pantallas nuevas o ampliadas
+
+- **Nueva:** `/perfil/acciones` (`src/pages/PrivacyActions.tsx`,
+  privada): lista propia de `audit_events` (acción + fecha, sin
+  nombres).
+- `/notas/:id` (`NoteDetail.tsx`): al aprobar, el reproductor de audio
+  se oculta de inmediato y se vacía la cola; sección «Borrar nota» al
+  final, con confirmación («Se borrarán la nota, su audio, sus datos,
+  tareas, borradores y exportaciones. Lo que ya enviaste por WhatsApp
+  o exportaste al CRM hay que borrarlo allí. Esta acción no se puede
+  deshacer.») y navegación a `/notas` tras borrar.
+- `/clientes/:id` (`ClientDetail.tsx`): botón «Descargar sus datos»
+  (JSON `datos-cliente-<YYYY-MM-DD>.json`); «Borrar» va por
+  `erase_client` (antes `removeClient`, **eliminado** de
+  `clients/api.ts`): sin notas, confirmación como antes; con notas,
+  la confirmación cuenta las notas y exige **escribir el nombre del
+  cliente**.
+- `/inmuebles/:id` (`PropertyDetail.tsx`): «Borrar datos del
+  propietario» con confirmación («Se borrarán su nombre y su teléfono.
+  El inmueble y sus notas se quedan. Los textos de las notas pueden
+  nombrar al propietario: revísalos o bórralos si lo pide.»); tras
+  borrar, la ficha muestra «Propietario borrado» y sin teléfono.
+  «Borrar» el inmueble sigue como antes (solo sin notas).
+- `/perfil` (`Profile.tsx`): sección «Privacidad» con los textos de
+  `src/features/privacy/texts.ts` (BORRADOR, editables por Luis) y
+  enlace «Mis acciones de privacidad».
+- `AuthProvider.tsx`: al entrar con una sesión nueva, vacía la cola de
+  audios una vez por usuario (nunca lanza).
+- **Nuevos módulos:** `src/features/privacy/` — `texts.ts`,
+  `audio-cleanup.ts` (`flushAudioCleanup()`, lotes de 50, nunca lanza),
+  `export.ts` (`buildClientDataExport`, esquema
+  `inmo-visitas.datos-cliente.v1`, sin `audio_url` ni `payload`),
+  `api.ts` (`listAuditEvents`, `countClientNotes`, `eraseClient`,
+  `erasePropertyOwner`, `downloadClientData`).
+- **Errores 429 en el cliente:** `extractNote`, `prepareFollowUp` y
+  `transcribeNote` muestran el `message` de la función (o la
+  traducción de `limite_diario_ia` en `db-errors.ts`:
+  `translateLimitError`). `removeNote` en `src/features/notes/api.ts`.
+- **Tipos** en `src/lib/database.types.ts`: `AudioCleanupRow`,
+  `AuditEventRow`, `AiCallRow` + tablas y RPCs `erase_client` /
+  `erase_property_owner` en `Database`.
+
+### Dependencias nuevas
+
+- **Ninguna de producción.** Sin cambios en tokens de diseño, fuentes,
+  ruta base ni Auth.
+
+### Build / test / lint
+
+- `npm test`: **243/243** (23 archivos; base 187 + 56 nuevos:
+  `audio-cleanup` 6, `export` 3, `db-errors` +1, `cors` 5×4, `limit`
+  8×3). Incluye DST de Madrid (29-mar y 25-oct-2026) y los límites
+  200/201 de `external_id` por el lado del cliente.
+- `npx tsc --noEmit`: **0 errores** (ojo: la primera pasada se dio por
+  buena por error —el `exit` leído era el de `tail`, no el de `tsc`— y
+  el build la cazó: faltaba importar `translateLimitError` en
+  `notes/api.ts`, faltaba `agent_id` en el select de `audit_events` y
+  `Profile.tsx` usaba una forma de `PRIVACY_TEXTS` que no era la del
+  archivo; los tres corregidos).
+- `npm run build` en base `/` y en `/inmo-visitas/`: **sin errores**.
+  Trozo mayor `vendor-react` **255,49 kB** (≤ 500 kB).
+- `npm run lint`: **2 avisos de shadcn aceptados, 0 errores**.
+- **`deno check` de las cuatro funciones: NO se pudo hacer (no hay
+  Deno en la VM)**. Lo hace Claude en la revisión. Los archivos nuevos
+  (`cors.ts`, `limit.ts`) son TypeScript puro sin APIs de Deno y sus
+  tests corren en vitest; `index.ts` usa `ReturnType<typeof
+  createClient>` en el helper del límite y `Deno.env.get` como antes.
+
+### Prueba local de la migración 0012 (PostgreSQL 16.15, `/tmp/pg-fase8`)
+
+Clúster temporal local; esquemas `auth`/`storage` simulados
+(`auth.uid()` lee `app.current_user_id`; `storage.foldername()` parte
+la ruta; `storage.buckets`/`objects` mínimos). Se aplicaron las
+migraciones 0001–0012 en orden, con datos de sacrificio (agentes A y B
+con los mismos ids que en el proyecto de pruebas). **Todo pasó
+(exit 0):**
+
+- `search_path` en las 6 guardas + nuevas funciones; revokes
+  efectivos (`has_function_privilege = false` para `anon` y
+  `authenticated`); `demo_seed_claim` fuera; RLS + políticas en las 3
+  tablas nuevas.
+- Teléfonos semilla normalizados (`+34612345678`, `+34611100200`, 0 con
+  espacios).
+- **B-4:** cambiar `visit_note_id` de una tarea o `audience` de un
+  borrador → `cambio_no_permitido`.
+- **B-9:** `external_id` de 201 caracteres → check violation en el
+  UPDATE a `enviado`; 200 caracteres pasan. (El guard de la 0011 pone
+  `external_id` a null en el INSERT, así que el check solo se puede
+  violar en el UPDATE, que es cuando la función pone el id del CRM.)
+- **Contacto:** teléfono `612 34 56 78` y email `SIN-ARROBA` → check
+  violation; teléfono/email válidos pasan.
+- **Aprobar nota con audio:** `audio_url` → null, `approved_at` puesto,
+  1 fila `nota_aprobada` en la cola con la ruta.
+- **`ai_calls` / `audit_events`:** insert propio OK; `update`/`delete`
+  afectan a **0 filas** (sin políticas de update/delete).
+- **Borrar nota con audio (borrador):** 1 fila `nota_borrada` en la
+  cola + 1 `nota_borrada` en `audit_events`. Borrar la nota ya aprobada
+  no duplica la cola (su audio ya se encoló al aprobar) pero sí
+  registra `nota_borrada`.
+- **B no ve nada de A:** 0 filas en `audio_cleanup`, `audit_events` y
+  `ai_calls` de A; `erase_client` del cliente de A como B →
+  `no_encontrado`.
+- **`erase_property_owner`:** nombre «Propietario borrado», teléfono
+  null, 1 `propietario_borrado` en el registro.
+- **`erase_client`:** cliente, notas, datos, tareas, borradores y
+  exportaciones a 0; 1 `cliente_borrado`; el inmueble sigue (V-99).
+  Lo de B intacto (verificado como postgres, sin RLS: cliente, nota e
+  inmueble de B existen; las consultas como A daban 0 por RLS, no por
+  borrado).
+- Estado final: cola 2 filas (1 `nota_aprobada`, 1 `nota_borrada`);
+  registro 6 filas (`nota_borrada` ×3, `datos_entregados`,
+  `cliente_borrado`, `propietario_borrado`).
+
+**Hallazgos de la prueba local (no son defectos de la 0012):**
+
+1. La 0012 hace `revoke … rls_auto_enable()`, pero esa función **la
+   crea Supabase** (event trigger `ensure_rls`) y **no está en ninguna
+   migración**: en un PostgreSQL pelado la 0012 falla en la línea 34
+   (`function public.rls_auto_enable() does not exist`). En el
+   proyecto real existe; en local hizo falta un stub. La 0012 se
+   aplica tal cual en Supabase.
+2. La simulación de `auth.users` necesitó la columna
+   `raw_user_meta_data` (la usa `handle_new_agent()` redefinida) y
+   los grants de `authenticated` sobre las tablas públicas (en
+   Supabase los pone la plataforma).
+
+### Qué se borra exactamente en cada borrado y qué queda fuera de la app
+
+- **Borrar nota** (`/notas/:id` → `delete` directo): la nota, sus
+  datos, tareas, borradores y exportaciones (cascada); su audio va a
+  la cola y `flushAudioCleanup()` lo borra de Storage; queda
+  `nota_borrada` en `audit_events`. Si la nota ya estaba aprobada, el
+  audio ya se había encolado al aprobar: no se duplica.
+- **Borrar cliente** (`erase_client`): el cliente y **todas** sus notas
+  con sus datos, tareas, borradores, exportaciones y audios (encolados
+  como `nota_borrada` por nota); queda `nota_borrada` por nota +
+  `cliente_borrado`. Los inmuebles no se tocan.
+- **Borrar datos del propietario** (`erase_property_owner`): solo su
+  nombre («Propietario borrado») y su teléfono (null). El inmueble, sus
+  notas y el resto quedan. Queda `propietario_borrado`.
+- **Aprobar nota:** solo el audio (encolado como `nota_aprobada` y
+  borrado de Storage por el navegador). La transcripción revisada es
+  la fuente desde entonces.
+- **Fuera de la app (no se borra):** mensajes de WhatsApp ya enviados,
+  fichas exportadas al CRM, el JSON descargado con «Descargar sus
+  datos», y cualquier copia que el agente haya hecho. Cada
+  confirmación de borrado lo dice.
+
+### Supuestos tomados y decisiones que quedan para Luis
+
+- **Supuestos (decididos aquí, revisables):**
+  - `nota_borrada` la escribe el trigger, no la app: así no hay
+    duplicados y queda registrada aunque la app falle entre llamadas.
+  - Un uso de IA = una invocación de la función (los dos borradores de
+    `drafts` y sus reintentos cuentan como uno); una respuesta ya
+    guardada no consume uso. El día es Europe/Madrid (00:00), con el
+    desplazamiento tomado a las 00:00 UTC para que los cambios de hora
+    no lo muevan (probado en los dos cambios de 2026).
+  - `allowedOrigins` / `madridDayStart` / `parseDailyLimit` se copian
+    en cada carpeta de función (no pueden compartir archivo hoy).
+  - La normalización de contacto quita separadores pero **no** añade
+    `+34` a números de 9 dígitos: esas filas pararían la migración
+    para revisión manual (en la semilla no hay ninguna).
+  - `removeClient` eliminado: borrar un cliente solo existe como
+    `eraseClient` (con registro). `removeProperty` se mantiene (borrar
+    inmueble sin notas, como antes).
+  - `ana.garcia@gmail.com` y los `example.com` se quedan en el HANDOFF:
+    son datos ficticios de semilla/prueba, no cuentas reales.
+  - El aviso de la captura («Graba tu resumen…») ya existía en forma
+    equivalente: no se duplicó.
+  - `PRIVACY_TEXTS` tiene forma `{ title, draftNotice, paragraphs[],
+    actionsLinkLabel, actionsIntro }`: la pantalla la usa tal cual.
+  - El `downloadClientData` no selecciona `audio_url` (sin audio en la
+    descarga) y registra `datos_entregados` **después** de lanzar la
+    descarga; si ese registro falla, avisa de que el archivo está
+    descargado pero la acción no quedó registrada.
+- **Decisiones para Luis (bloquean el piloto con datos reales, no esta
+  fase):** proveedor de IA definitivo + plan de pago con DPA; base
+  legal y textos legales; plan de Supabase (copias); SMTP propio; repo
+  privado + staging en Coolify; limpieza de datos de prueba (su «sí»
+  por escrito); reescribir o no el historial de git (emails reales).
+  Los 4 docs de `docs/rgpd/` son **BORRADOR** y dicen «(decide Luis)»
+  donde falta su decisión.
+- **Pendiente de Argo tras verificar:** aplicar la 0012 en el proyecto
+  real por la Management API; revisar los Advisors en el panel;
+  redesplegar las 4 funciones (clic de Luis); desplegar en Pages.
+
+### Cómo probarlo (con datos de sacrificio, nunca con la nota de ejemplo)
+
+1. Aplicar la 0012 en el proyecto de pruebas (Argo, Management API) y
+   redesplegar las 4 funciones (Luis, panel; pegar `index.ts` +
+   `cors.ts` y `limit.ts` en cada una). Sin `ALLOWED_ORIGINS` ni
+   `AI_DAILY_LIMIT`, todo sigue igual.
+2. Como agente A, crear un cliente de sacrificio + inmueble + nota de
+   voz (o texto), extraer, revisar y aprobar: al aprobar, el audio
+   desaparece de la nota y la cola se vacía al recargar.
+3. En la nota de sacrificio: «Borrar nota» → confirmar → la nota
+   desaparece de `/notas` y `/perfil/acciones` muestra «Nota borrada».
+4. Cliente de sacrificio con notas: «Borrar cliente y todos sus
+   datos» → escribir su nombre → desaparece de `/clientes`; «Mis
+   acciones de privacidad» muestra «Cliente borrado con sus notas».
+5. Inmueble de sacrificio: «Borrar datos del propietario» → la ficha
+   muestra «Propietario borrado» y sin teléfono.
+6. «Descargar sus datos» en un cliente: se descarga
+   `datos-cliente-<fecha>.json` (sin `audio_url` ni `payload`) y
+   `/perfil/acciones` muestra «Datos del cliente entregados».
+7. Límite diario: poner `AI_DAILY_LIMIT = 2` en los *secrets*, hacer 2
+   usos de IA y un tercero → 429 con «Has llegado al límite diario de
+   usos de la IA. Vuelve a intentarlo mañana.» (quitar el secret
+   después).
+8. B-4/B-9/contacto: desde el SQL Editor, intentar cambiar
+   `visit_note_id` de una tarea (`cambio_no_permitido`), poner un
+   `external_id` de 201 caracteres en una exportación enviada (check),
+   o un teléfono con espacios (check).
+9. **No ejecutar `docs/deploy/limpieza-pruebas.sql` sin el «sí» por
+   escrito de Luis.** Cuando lo dé: primero la Parte 1 (listar y
+   revisar), luego la Parte 2 (borrar); después, entrar en la app con
+   cada agente para vaciar la cola de audios.
+
+**Fase 8 construida (sin commit, tag ni push). Pendiente de Argo:**
+verificar, aplicar la 0012, revisar Advisors, redesplegar funciones y
+desplegar en Pages. Después, la prueba en navegador con datos de
+sacrificio (criterios del prompt, punto 8).
+
+### Verificación independiente de Argo (2026-11-13)
+
+- Tests **243/243** (23 archivos), `tsc --noEmit` 0 errores, `npm run
+  build` en base `/` y `/inmo-visitas/` sin errores, `npm run lint` 2
+  avisos shadcn, 0 errores. Trozo mayor `vendor-react` 256 kB.
+- Copias de la 0012 byte-idénticas (`cmp`). Guards verificados por
+  diff: `visit_notes_guard` idéntico a la 0008 salvo el bloque de
+  audio al aprobar; `tasks_guard`/`drafts_guard` idénticos a la 0009
+  salvo el bloque B-4. `limit.ts` revisado (día Europe/Madrid con
+  offset a las 00:00 UTC; DST probado en tests).
+- `git grep` de claves sin resultados reales (`service_role` solo en
+  comentarios/docs). Emails reales de `docs/HANDOFF.md` sustituidos
+  por marcadores (5 ocurrencias); quedan los ficticios de semilla
+  (`ana.garcia@gmail.com`, `example.com`) por diseño.
+- **La 0012 NO se había aplicado al proyecto real: Argo la aplicó
+  2026-11-13 por la Management API** en 5 trozos (el archivo, 19.827
+  B, supera el límite de ~14 kB del endpoint), todos con exit 0.
+  Verificado después en la base real: `demo_seed_claim` fuera;
+  `audio_cleanup`, `audit_events` y `ai_calls` creadas con 7
+  políticas; `search_path=public, pg_temp` en las 10 funciones;
+  `handle_new_agent()` y `rls_auto_enable()` no ejecutables por
+  `anon` ni `authenticated`; los 4 checks de formato y `external_id`
+  existen; teléfonos normalizados (`+34612345678`,
+  `+34611100200`); 0 filas de contacto que no cumplieran tras
+  normalizar (comprobado antes de aplicar).
+- Pendiente: verificación de los criterios 1–11 por API con datos de
+  sacrificio (hacen falta las contraseñas de los agentes de prueba,
+  que Luis pasa transitoriamente), redespliegue de las 4 funciones
+  por Luis, prueba en navegador y Pages.

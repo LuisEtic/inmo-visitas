@@ -16,6 +16,7 @@ import {
   removeProperty,
   updateProperty,
 } from '../features/properties/api'
+import { erasePropertyOwner } from '../features/privacy/api'
 import { nextFreeReference } from '../features/properties/reference'
 import {
   PROPERTY_STATUS_LABELS,
@@ -52,6 +53,11 @@ function PropertyDetailView({ id }: { id: string | undefined }) {
   const [formError, setFormError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  // Fase 8: borrar los datos del propietario (lo anonimiza, sin
+  // borrar el inmueble ni las notas).
+  const [confirmingEraseOwner, setConfirmingEraseOwner] = useState(false)
+  const [erasingOwner, setErasingOwner] = useState(false)
+  const [eraseOwnerError, setEraseOwnerError] = useState<string | null>(null)
   // Solo al crear: la siguiente referencia libre (V-54 si existe hasta
   // V-53). null mientras carga; si falla la lista, se usa V-01.
   const [suggestedReference, setSuggestedReference] = useState<string | null>(
@@ -139,6 +145,33 @@ function PropertyDetailView({ id }: { id: string | undefined }) {
       setFormError(error instanceof Error ? error.message : 'Ha ocurrido un error.')
       setDeleting(false)
       setConfirmingDelete(false)
+    }
+  }
+
+  async function handleEraseOwner() {
+    if (property === null) return
+    setEraseOwnerError(null)
+    setErasingOwner(true)
+    try {
+      await erasePropertyOwner(property.id)
+      setProperty((previous) =>
+        previous === null
+          ? previous
+          : {
+              ...previous,
+              owner_name: 'Propietario borrado',
+              owner_phone: null,
+            },
+      )
+      setConfirmingEraseOwner(false)
+    } catch (error) {
+      setEraseOwnerError(
+        error instanceof Error
+          ? error.message
+          : 'No se han podido borrar los datos del propietario.',
+      )
+    } finally {
+      setErasingOwner(false)
     }
   }
 
@@ -232,6 +265,63 @@ function PropertyDetailView({ id }: { id: string | undefined }) {
               <div className="mt-2">
                 <ContactButtons phone={property.owner_phone} />
               </div>
+              {property.owner_name !== 'Propietario borrado' && (
+                <div className="mt-4">
+                  {!confirmingEraseOwner && (
+                    <Button
+                      variant="secondary"
+                      size="lg"
+                      className="border-error text-error"
+                      onClick={() => setConfirmingEraseOwner(true)}
+                    >
+                      Borrar datos del propietario
+                    </Button>
+                  )}
+                  {confirmingEraseOwner && (
+                    <div className="rounded-md border border-error bg-bg px-4 py-4">
+                      <p className="font-semibold">
+                        ¿Borrar los datos del propietario?
+                      </p>
+                      <p className="mt-1 text-sm text-text-secondary">
+                        Se borrarán su nombre y su teléfono. El inmueble y
+                        sus notas se quedan.
+                      </p>
+                      <p className="mt-1 text-sm text-text-secondary">
+                        Los textos de las notas pueden nombrar al
+                        propietario: revísalos o bórralos si lo pide.
+                      </p>
+                      <p className="mt-1 text-sm text-text-secondary">
+                        Esta acción no se puede deshacer.
+                      </p>
+                      <div className="mt-4 flex flex-wrap gap-3">
+                        <Button
+                          variant="secondary"
+                          size="lg"
+                          className="border-error text-error"
+                          onClick={() => void handleEraseOwner()}
+                          disabled={erasingOwner}
+                        >
+                          {erasingOwner
+                            ? 'Borrando…'
+                            : 'Borrar datos del propietario'}
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="lg"
+                          onClick={() => setConfirmingEraseOwner(false)}
+                        >
+                          Cancelar
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  {eraseOwnerError !== null && (
+                    <p className="mt-3 text-sm text-error">
+                      {eraseOwnerError}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             {formError !== null && <p className="text-sm text-error">{formError}</p>}

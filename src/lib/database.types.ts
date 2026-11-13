@@ -308,6 +308,57 @@ export type CrmExportUpdate = {
   payload?: Record<string, unknown> | null
 }
 
+export type AudioCleanupReason = 'nota_borrada' | 'nota_aprobada'
+
+/**
+ * Fila de la cola de borrado de audios (Fase 8, migración 0012).
+ * Guarda solo la ruta del objeto en `visit-audio` y el motivo. El
+ * navegador (`flushAudioCleanup`) borra los objetos y vacía la cola.
+ * Sin `update`: la cola no se edita, solo se vacía.
+ */
+export type AudioCleanupRow = {
+  id: string
+  agent_id: string
+  path: string
+  reason: AudioCleanupReason
+  created_at: string
+}
+
+export type AuditEventAction =
+  | 'nota_borrada'
+  | 'cliente_borrado'
+  | 'propietario_borrado'
+  | 'datos_entregados'
+
+/**
+ * Registro de acciones de privacidad (Fase 8, migración 0012). Solo
+ * inserción y sin datos personales (ni nombres, ni textos, ni rutas):
+ * sirve para rendir cuentas (art. 5.2 RGPD). Se borra solo con la
+ * cuenta del agente (cascada desde `agents`).
+ */
+export type AuditEventRow = {
+  id: string
+  agent_id: string
+  action: AuditEventAction
+  entity_id: string | null
+  created_at: string
+}
+
+export type AiCallFunction = 'transcribe' | 'extract' | 'drafts'
+
+/**
+ * Llamada a la IA (Fase 8, migración 0012): una fila por llamada a
+ * `transcribe`, `extract` o `drafts`, para el límite diario por
+ * agente. Sin `update` ni `delete`: el agente no puede borrar su
+ * cuenta de llamadas.
+ */
+export type AiCallRow = {
+  id: string
+  agent_id: string
+  fn: AiCallFunction
+  created_at: string
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -428,9 +479,47 @@ export interface Database {
           },
         ]
       }
+      audio_cleanup: {
+        Row: AudioCleanupRow
+        Insert: {
+          agent_id?: string
+          path: string
+          reason: AudioCleanupReason
+        }
+        Update: Record<string, never>
+        Relationships: []
+      }
+      audit_events: {
+        Row: AuditEventRow
+        Insert: {
+          agent_id?: string
+          action: AuditEventAction
+          entity_id?: string | null
+        }
+        Update: Record<string, never>
+        Relationships: []
+      }
+      ai_calls: {
+        Row: AiCallRow
+        Insert: {
+          agent_id?: string
+          fn: AiCallFunction
+        }
+        Update: Record<string, never>
+        Relationships: []
+      }
     }
     Views: Record<string, never>
-    Functions: Record<string, never>
+    Functions: {
+      erase_client: {
+        Args: { p_client_id: string }
+        Returns: void
+      }
+      erase_property_owner: {
+        Args: { p_property_id: string }
+        Returns: void
+      }
+    }
     Enums: Record<string, never>
     CompositeTypes: Record<string, never>
   }

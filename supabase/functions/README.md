@@ -9,6 +9,36 @@ Las funciones de servidor se crean en fases posteriores, por ejemplo:
 
 Las claves de IA solo viven aquí, en el servidor. Nunca en el cliente.
 
+## Fase 8: CORS configurable y límite diario de IA
+
+Las cuatro funciones leen los orígenes CORS del *secret*
+`ALLOWED_ORIGINS` (lista separada por comas, p. ej.
+`https://visitas.agencia.com`). Si falta o queda vacío, se usan los
+tres actuales (`http://localhost:5173`, `http://localhost:4173`,
+`https://luisetic.github.io`). **El secret es opcional en pruebas:**
+sin crearlo, todo sigue igual.
+
+Las tres funciones de IA (`transcribe`, `extract`, `drafts`) tienen
+un límite diario por agente: **150 usos al día por defecto**
+(*secret* `AI_DAILY_LIMIT`, entero ≥ 1; si falta o no vale, 150). El
+día se cuenta en **Europe/Madrid** (desde las 00:00 de Madrid) y cada
+invocación cuenta como **un uso** aunque la función llame dos veces
+al modelo (los dos borradores de `drafts`) o reintente. Una respuesta
+ya guardada no cuenta: `transcribe` no consume uso si la nota ya
+está transcrita. Al llegar al límite, la función responde **429**
+`{ "error": "limite_diario_ia", "message": "Has llegado al límite diario de usos de la IA. Vuelve a intentarlo mañana." }`
+sin llamar al proveedor, y la app muestra ese mensaje. Cada uso se
+registra en la tabla `ai_calls` (migración 0012).
+
+**Redespliegue de la Fase 8 (hay que hacerlo a mano, clic de Luis):**
+las cuatro funciones cambian (`index.ts` + `cors.ts` nuevos, y
+`limit.ts` en las tres de IA). Para cada función: editarla en el
+panel, pegar el `index.ts` actualizado y **añadir los archivos
+nuevos** (`cors.ts` en las cuatro; `limit.ts` en `transcribe`,
+`extract` y `drafts`) con esos mismos nombres, porque `index.ts` los
+importa como `./cors.ts` y `./limit.ts`. Los *secrets* de proveedor
+no cambian; `ALLOWED_ORIGINS` y `AI_DAILY_LIMIT` son opcionales.
+
 ## `transcribe` (Fase 4)
 
 Transcribe el audio de una nota de visita con Whisper y guarda el texto

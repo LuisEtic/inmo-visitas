@@ -14,6 +14,7 @@ export function translateDbError(
     drafts?: boolean
     task?: boolean
     exports?: boolean
+    contact?: boolean
   },
 ): string {
   if (error.code === '23505') {
@@ -27,6 +28,14 @@ export function translateDbError(
   }
   if (error.code === '23503') {
     return 'No se puede borrar: tiene notas de visita asociadas'
+  }
+  if (error.code === '23514') {
+    // Migración 0012 (Fase 8): formato de contacto en `clients` y
+    // `properties`. Solo lo traduce el contexto de contacto; otros
+    // `check` (estados de tareas o borradores) siguen en genérico.
+    if (context?.contact === true) {
+      return 'El teléfono o el email no tienen un formato válido.'
+    }
   }
   if (error.code === '42501') {
     return 'No tienes permiso para esta acción'
@@ -79,6 +88,44 @@ export function translateDbError(
     if (error.message.includes('exportacion_cerrada')) {
       return 'Esta exportación ya está cerrada; si quieres, vuelve a exportar.'
     }
+    // Migración 0012 (Fase 8): seguridad y RGPD.
+    if (error.message.includes('cambio_no_permitido')) {
+      return 'Este cambio no está permitido.'
+    }
+    if (error.message.includes('no_encontrado')) {
+      return 'No se ha encontrado.'
+    }
+    // El código lo devuelven las Edge Functions con el 429 del límite
+    // diario de IA; aquí queda la traducción para cualquier vía que
+    // lo muestre como error de base.
+    if (error.message.includes('limite_diario_ia')) {
+      return 'Has llegado al límite diario de usos de la IA. Vuelve a intentarlo mañana.'
+    }
   }
   return 'Ha ocurrido un error. Inténtalo de nuevo.'
+}
+
+/**
+ * Mensaje del 429 del límite diario de IA (Fase 8): las funciones
+ * `transcribe`, `extract` y `drafts` devuelven
+ * `{ "error": "limite_diario_ia", "message": "<texto en español>" }`.
+ * Se prefiere el `message` de la función; si no viene, la traducción
+ * de `translateDbError`.
+ */
+export function translateLimitError(body: unknown): string {
+  if (
+    typeof body === 'object' &&
+    body !== null &&
+    'message' in body &&
+    typeof body.message === 'string' &&
+    body.message !== ''
+  ) {
+    return body.message
+  }
+  return translateDbError({
+    code: 'P0001',
+    message: 'limite_diario_ia',
+    details: '',
+    hint: '',
+  } as PostgrestError)
 }

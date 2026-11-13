@@ -1,6 +1,6 @@
 import { FunctionsHttpError } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase'
-import { translateDbError } from '../../lib/db-errors'
+import { translateDbError, translateLimitError } from '../../lib/db-errors'
 import type {
   ExtractedFactInsert,
   ExtractedFactRow,
@@ -73,7 +73,8 @@ const EXTRACT_ERROR = 'No se han podido extraer los datos. Inténtalo de nuevo.'
  * Mensaje para el agente cuando falla `extract`. Los 400 («La nota no
  * tiene texto para extraer») y 409 («La nota ya está en revisión») traen
  * un mensaje en español propio de la función que se muestra tal cual;
- * el resto (401, 404, 502, red) se queda en el mensaje genérico.
+ * el 429 del límite diario muestra su mensaje en español; el resto
+ * (401, 404, 502, red) se queda en el mensaje genérico.
  */
 async function extractErrorMessage(error: unknown): Promise<string> {
   if (!(error instanceof FunctionsHttpError)) {
@@ -83,22 +84,26 @@ async function extractErrorMessage(error: unknown): Promise<string> {
   if (!(response instanceof Response)) {
     return EXTRACT_ERROR
   }
+  let body: unknown = null
+  try {
+    body = await response.json()
+  } catch {
+    // Cuerpo no JSON: mensaje genérico (o límite sin texto).
+  }
+  if (response.status === 429) {
+    return translateLimitError(body)
+  }
   if (response.status !== 400 && response.status !== 409) {
     return EXTRACT_ERROR
   }
-  try {
-    const body: unknown = await response.json()
-    if (
-      typeof body === 'object' &&
-      body !== null &&
-      'error' in body &&
-      typeof body.error === 'string' &&
-      body.error !== ''
-    ) {
-      return body.error
-    }
-  } catch {
-    // Cuerpo no JSON: mensaje genérico.
+  if (
+    typeof body === 'object' &&
+    body !== null &&
+    'error' in body &&
+    typeof body.error === 'string' &&
+    body.error !== ''
+  ) {
+    return body.error
   }
   return EXTRACT_ERROR
 }

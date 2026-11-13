@@ -1,5 +1,7 @@
+import { FunctionsHttpError } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase'
-import { translateDbError } from '../../lib/db-errors'
+import { translateDbError, translateLimitError } from '../../lib/db-errors'
+import { flushAudioCleanup } from '../privacy/audio-cleanup'
 import { matchesNoteQuery } from '../../lib/search'
 import type {
   ClientRow,
@@ -170,6 +172,7 @@ export async function updateNoteText(
  * Devuelve la transcripción. Si la función falla (502, nota de otro
  * agente, sin JWT), el mensaje es el mismo en español y la nota se
  * queda en `draft`; el detalle del proveedor nunca llega al cliente.
+ * El 429 del límite diario de IA muestra su mensaje en español.
  */
 export async function transcribeNote(noteId: string): Promise<string> {
   const client = requireSupabase()
@@ -177,13 +180,42 @@ export async function transcribeNote(noteId: string): Promise<string> {
     body: { visit_note_id: noteId },
   })
   if (error !== null) {
-    throw new Error('No se ha podido transcribir. Inténtalo de nuevo.')
+    throw new Error(await transcribeErrorMessage(error))
   }
   const transcript = (data as { transcript?: unknown } | null)?.transcript
   if (typeof transcript !== 'string' || transcript === '') {
     throw new Error('No se ha podido transcribir. Inténtalo de nuevo.')
   }
   return transcript
+}
+
+async function transcribeErrorMessage(error: unknown): Promise<string> {
+  if (!(error instanceof FunctionsHttpError)) {
+    return 'No se ha podido transcribir. Inténtalo de nuevo.'
+  }
+  const response: unknown = error.context
+  if (!(response instanceof Response) || response.status !== 429) {
+    return 'No se ha podido transcribir. Inténtalo de nuevo.'
+  }
+  let body: unknown = null
+  try {
+    body = await response.json()
+  } catch {
+    // Cuerpo no JSON: el límite sin texto.
+  }
+  return translateLimitError(body)
+}
+
+/** Borra una nota (en cualquier estado). El trigger de borrado de la
+ *  migración 0012 encola su audio y registra `nota_borrada`; aquí
+ *  solo queda vaciar la cola de audios. */
+export async function removeNote(noteId: string): Promise<void> {
+  const client = requireSupabase()
+  const { error } = await client.from('visit_notes').delete().eq('id', noteId)
+  if (error !== null) {
+    throw new Error(translateDbError(error))
+  }
+  await flushAudioCleanup()
 }
 
 export type NoteWithClientAndProperty = VisitNoteRow & {

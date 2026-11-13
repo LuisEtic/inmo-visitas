@@ -1,6 +1,6 @@
 import { FunctionsHttpError } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase'
-import { translateDbError } from '../../lib/db-errors'
+import { translateDbError, translateLimitError } from '../../lib/db-errors'
 import type {
   DraftAudience,
   DraftInsert,
@@ -65,8 +65,9 @@ export class DraftsRulesError extends Error {
  * Llama a la Edge Function `drafts`: sin `audience` prepara los dos
  * borradores y las tareas propuestas; con `audience` solo regenera
  * ese borrador («Volver a generar»). Los 400/409/422 traen un mensaje
- * en español propio de la función que se muestra tal cual; el resto
- * (401, 404, 502, red) se queda en el mensaje genérico.
+ * en español propio de la función que se muestra tal cual; el 429 del
+ * límite diario muestra su mensaje en español; el resto (401, 404,
+ * 502, red) se queda en el mensaje genérico.
  */
 export async function prepareFollowUp(
   noteId: string,
@@ -106,22 +107,26 @@ async function prepareFollowUpError(error: unknown): Promise<Error> {
   if (response.status === 422) {
     return new DraftsRulesError()
   }
+  let body: unknown = null
+  try {
+    body = await response.json()
+  } catch {
+    // Cuerpo no JSON: mensaje genérico (o límite sin texto).
+  }
+  if (response.status === 429) {
+    return new Error(translateLimitError(body))
+  }
   if (response.status !== 400 && response.status !== 409) {
     return new Error(DRAFTS_ERROR)
   }
-  try {
-    const body: unknown = await response.json()
-    if (
-      typeof body === 'object' &&
-      body !== null &&
-      'error' in body &&
-      typeof body.error === 'string' &&
-      body.error !== ''
-    ) {
-      return new Error(body.error)
-    }
-  } catch {
-    // Cuerpo no JSON: mensaje genérico.
+  if (
+    typeof body === 'object' &&
+    body !== null &&
+    'error' in body &&
+    typeof body.error === 'string' &&
+    body.error !== ''
+  ) {
+    return new Error(body.error)
   }
   return new Error(DRAFTS_ERROR)
 }

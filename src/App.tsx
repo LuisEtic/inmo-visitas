@@ -18,6 +18,7 @@ const Capture = lazy(() => import('./pages/Capture'))
 const NoteDetail = lazy(() => import('./pages/NoteDetail'))
 const Notes = lazy(() => import('./pages/Notes'))
 const Pending = lazy(() => import('./pages/Pending'))
+const PrivacyActions = lazy(() => import('./pages/PrivacyActions'))
 
 function PageFallback() {
   return (
@@ -59,6 +60,14 @@ function App() {
               element={
                 <RequireAuth>
                   <Profile />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/perfil/acciones"
+              element={
+                <RequireAuth>
+                  <PrivacyActions />
                 </RequireAuth>
               }
             />

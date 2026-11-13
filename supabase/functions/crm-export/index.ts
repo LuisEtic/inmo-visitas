@@ -1,5 +1,6 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { z } from 'npm:zod@4'
+import { allowedOrigins } from './cors.ts'
 import {
   buildSummary,
   inmovillaPayloadSchema,
@@ -46,11 +47,12 @@ import {
  *   en las respuestas de error.
  */
 
-const ALLOWED_ORIGINS = new Set([
-  'http://localhost:5173',
-  'http://localhost:4173',
-  'https://luisetic.github.io',
-])
+/**
+ * Orígenes CORS (Fase 8, B-9): salen del secret `ALLOWED_ORIGINS`
+ * (lista separada por comas); si falta, los tres actuales. No es
+ * función de IA: no lleva límite diario.
+ */
+const ALLOWED_ORIGINS = allowedOrigins((name) => Deno.env.get(name))
 
 const ALLOWED_HEADERS = 'authorization, x-client-info, apikey, content-type'
 

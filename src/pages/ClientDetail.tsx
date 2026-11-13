@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
+import { Input } from '../components/ui/input'
+import { Label } from '../components/ui/label'
 import { ContactButtons, PhoneText } from '../components/ContactButtons'
 import { PrivateNav } from '../components/PrivateNav'
 import { SupabaseMissingNotice } from '../components/SupabaseMissingNotice'
@@ -11,9 +13,13 @@ import { ClientForm } from '../features/clients/ClientForm'
 import {
   createClient,
   getClient,
-  removeClient,
   updateClient,
 } from '../features/clients/api'
+import {
+  countClientNotes,
+  downloadClientData,
+  eraseClient,
+} from '../features/privacy/api'
 import type { ClientFormValues } from '../features/clients/schema'
 import { APP_PHASE_LABEL } from '../lib/app-label'
 
@@ -45,6 +51,12 @@ function ClientDetailView({ id }: { id: string | undefined }) {
   const [formError, setFormError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  // Fase 8: cuántas notas tiene el cliente (para la confirmación de
+  // borrado). null mientras carga.
+  const [noteCount, setNoteCount] = useState<number | null>(null)
+  const [confirmName, setConfirmName] = useState('')
+  const [downloading, setDownloading] = useState(false)
+  const [downloadError, setDownloadError] = useState<string | null>(null)
 
   useEffect(() => {
     if (id === undefined) {
@@ -56,6 +68,15 @@ function ClientDetailView({ id }: { id: string | undefined }) {
         if (!mounted) return
         setClient(row)
         setLoading(false)
+        if (row !== null) {
+          countClientNotes(row.id)
+            .then((count) => {
+              if (mounted) setNoteCount(count)
+            })
+            .catch(() => {
+              if (mounted) setNoteCount(0)
+            })
+        }
       })
       .catch((error: unknown) => {
         if (!mounted) return
@@ -92,12 +113,32 @@ function ClientDetailView({ id }: { id: string | undefined }) {
     setFormError(null)
     setDeleting(true)
     try {
-      await removeClient(client.id)
+      // Fase 8: borra el cliente con todas sus notas (datos, tareas,
+      // borradores, exportaciones y audios) y registra
+      // `cliente_borrado`. Sin notas, igual: queda el registro.
+      await eraseClient(client.id)
       navigate('/clientes', { replace: true })
     } catch (error) {
       setFormError(error instanceof Error ? error.message : 'Ha ocurrido un error.')
       setDeleting(false)
       setConfirmingDelete(false)
+    }
+  }
+
+  async function handleDownloadData() {
+    if (client === null) return
+    setDownloadError(null)
+    setDownloading(true)
+    try {
+      await downloadClientData(client.id)
+    } catch (error) {
+      setDownloadError(
+        error instanceof Error
+          ? error.message
+          : 'No se han podido descargar los datos.',
+      )
+    } finally {
+      setDownloading(false)
     }
   }
 
@@ -194,33 +235,93 @@ function ClientDetailView({ id }: { id: string | undefined }) {
               <Button size="lg" onClick={() => setEditing(true)}>
                 Editar
               </Button>
+              <Button
+                variant="secondary"
+                size="lg"
+                onClick={() => void handleDownloadData()}
+                disabled={downloading}
+              >
+                {downloading ? 'Descargando…' : 'Descargar sus datos'}
+              </Button>
               {!confirmingDelete && (
                 <Button
                   variant="secondary"
                   size="lg"
                   className="border-error text-error"
-                  onClick={() => setConfirmingDelete(true)}
+                  onClick={() => {
+                    setConfirmName('')
+                    setConfirmingDelete(true)
+                  }}
                 >
                   Borrar
                 </Button>
               )}
             </div>
 
+            {downloadError !== null && (
+              <p className="text-sm text-error">{downloadError}</p>
+            )}
+
             {confirmingDelete && (
               <div className="rounded-md border border-error bg-bg px-4 py-4">
                 <p className="font-semibold">
                   ¿Borrar a {client.full_name}?
                 </p>
-                <p className="mt-1 text-sm text-text-secondary">
-                  Esta acción no se puede deshacer.
-                </p>
+                {noteCount === null && (
+                  <p className="mt-1 text-sm text-text-secondary">
+                    Cargando…
+                  </p>
+                )}
+                {noteCount !== null && noteCount > 0 && (
+                  <>
+                    <p className="mt-1 text-sm text-text-secondary">
+                      Se borrarán {client.full_name} y sus {noteCount}{' '}
+                      {noteCount === 1 ? 'nota' : 'notas'} con sus datos,
+                      tareas, borradores y exportaciones. Lo que ya
+                      enviaste por WhatsApp o exportaste al CRM hay que
+                      borrarlo allí.
+                    </p>
+                    <p className="mt-1 text-sm text-text-secondary">
+                      Para confirmar, escribe el nombre del cliente.
+                    </p>
+                    <div className="mt-3">
+                      <Label htmlFor="confirmar-nombre">
+                        Nombre del cliente
+                      </Label>
+                      <Input
+                        id="confirmar-nombre"
+                        value={confirmName}
+                        onChange={(event) =>
+                          setConfirmName(event.target.value)
+                        }
+                        autoComplete="off"
+                        className="mt-1"
+                      />
+                    </div>
+                  </>
+                )}
+                {noteCount === 0 && (
+                  <p className="mt-1 text-sm text-text-secondary">
+                    Se borrarán sus datos. Esta acción no se puede
+                    deshacer.
+                  </p>
+                )}
+                {noteCount !== null && noteCount > 0 && (
+                  <p className="mt-1 text-sm text-text-secondary">
+                    Esta acción no se puede deshacer.
+                  </p>
+                )}
                 <div className="mt-4 flex flex-wrap gap-3">
                   <Button
                     variant="secondary"
                     size="lg"
                     className="border-error text-error"
                     onClick={handleDelete}
-                    disabled={deleting}
+                    disabled={
+                      deleting ||
+                      noteCount === null ||
+                      (noteCount > 0 && confirmName !== client.full_name)
+                    }
                   >
                     {deleting ? 'Borrando…' : 'Borrar'}
                   </Button>

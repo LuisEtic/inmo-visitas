@@ -10,6 +10,7 @@ import { SupabaseMissingNotice } from '../components/SupabaseMissingNotice'
 import { useAuth } from '../lib/auth-context'
 import { APP_PHASE_LABEL } from '../lib/app-label'
 import { mapAuthErrorMessage } from '../lib/auth-errors'
+import { PRIVACY_TEXTS } from '../features/privacy/texts'
 import { supabase } from '../lib/supabase'
 
 const profileSchema = z.object({
@@ -192,6 +193,28 @@ export default function Profile() {
           </Button>
         </form>
       )}
+
+      <section className="mt-10" aria-labelledby="perfil-privacidad">
+        <h2 id="perfil-privacidad" className="text-lg font-semibold">
+          {PRIVACY_TEXTS.title}
+        </h2>
+        <p className="mt-2 text-sm font-semibold text-text-secondary">
+          {PRIVACY_TEXTS.draftNotice}
+        </p>
+        {PRIVACY_TEXTS.paragraphs.map((paragraph) => (
+          <p key={paragraph.slice(0, 24)} className="mt-2 text-sm text-text-secondary">
+            {paragraph}
+          </p>
+        ))}
+        <p className="mt-4 text-sm">
+          <Link
+            to="/perfil/acciones"
+            className="font-semibold underline underline-offset-2"
+          >
+            {PRIVACY_TEXTS.actionsLinkLabel}
+          </Link>
+        </p>
+      </section>
 
       <div className="mt-8 flex flex-wrap gap-4 text-sm">
         <Link to="/" className="font-semibold underline underline-offset-2">

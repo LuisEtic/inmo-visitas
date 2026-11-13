@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { AuthContext } from '../lib/auth-context'
+import { flushAudioCleanup } from '../features/privacy/audio-cleanup'
 
 /**
  * Proveedor de sesión. Escucha onAuthStateChange y mantiene la sesión en
@@ -15,6 +16,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   // Sin cliente de Supabase no hay sesión que comprobar: carga terminada.
   const [loading, setLoading] = useState(supabase !== null)
+  // Fase 8: el usuario para el que ya se vació la cola de audios en
+  // esta sesión del navegador. La cola se vacía una vez por sesión
+  // (al entrar), y nunca lanza: si falla, lo que quede se vacía la
+  // próxima vez.
+  const flushedUserIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (supabase === null) {
@@ -46,6 +52,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       subscription.unsubscribe()
     }
   }, [])
+
+  // Fase 8: al entrar con una sesión nueva, vaciar la cola de audios
+  // pendientes de borrar (aprobaciones y borrados anteriores).
+  useEffect(() => {
+    const userId = session?.user.id
+    if (userId === undefined || flushedUserIdRef.current === userId) {
+      return
+    }
+    flushedUserIdRef.current = userId
+    void flushAudioCleanup()
+  }, [session])
 
   const signOut = useCallback(async () => {
     if (supabase !== null) {

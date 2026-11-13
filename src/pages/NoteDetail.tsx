@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -52,9 +52,11 @@ import {
 import {
   getNote,
   getSignedAudioUrl,
+  removeNote,
   transcribeNote,
   updateNoteText,
 } from '../features/notes/api'
+import { flushAudioCleanup } from '../features/privacy/audio-cleanup'
 import { clientConfig } from '../config/client'
 import { getCrmAdapter } from '../integrations/crm'
 import type { CrmExportResult } from '../integrations/crm/types'
@@ -128,6 +130,7 @@ export default function NoteDetail() {
 
 function NoteDetailView({ id }: { id: string | undefined }) {
   const { supabaseConfigured } = useAuth()
+  const navigate = useNavigate()
 
   const [note, setNote] = useState<VisitNoteRow | null>(null)
   const [client, setClient] = useState<ClientRow | null>(null)
@@ -171,6 +174,12 @@ function NoteDetailView({ id }: { id: string | undefined }) {
   const [approving, setApproving] = useState(false)
   const [approveError, setApproveError] = useState<string | null>(null)
   const markRef = useRef<HTMLElement | null>(null)
+
+  // Borrar la nota (Fase 8): con confirmación; el trigger de borrado
+  // encola su audio y registra `nota_borrada`.
+  const [confirmingDeleteNote, setConfirmingDeleteNote] = useState(false)
+  const [deletingNote, setDeletingNote] = useState(false)
+  const [deleteNoteError, setDeleteNoteError] = useState<string | null>(null)
 
   // Seguimiento (Fase 6): borradores duales y tareas, solo nota aprobada.
   const [drafts, setDrafts] = useState<DraftRow[] | null>(null)
@@ -630,8 +639,14 @@ function NoteDetailView({ id }: { id: string | undefined }) {
               ...previous,
               status: 'approved',
               approved_at: new Date().toISOString(),
+              // Al aprobar, el audio se borra (Fase 8): la base encola
+              // su ruta y el navegador la vacía; el reproductor se
+              // oculta de inmediato.
+              audio_url: null,
             },
       )
+      setAudioUrl(null)
+      void flushAudioCleanup()
       setShowApproveConfirm(false)
       void loadFollowUp(note.id)
     } catch (error: unknown) {
@@ -640,6 +655,24 @@ function NoteDetailView({ id }: { id: string | undefined }) {
       )
     } finally {
       setApproving(false)
+    }
+  }
+
+  async function handleDeleteNote() {
+    if (note === null) {
+      return
+    }
+    setDeletingNote(true)
+    setDeleteNoteError(null)
+    try {
+      await removeNote(note.id)
+      navigate('/notas', { replace: true })
+    } catch (error: unknown) {
+      setDeleteNoteError(
+        error instanceof Error ? error.message : 'No se ha podido borrar la nota.',
+      )
+      setDeletingNote(false)
+      setConfirmingDeleteNote(false)
     }
   }
 
@@ -2628,6 +2661,62 @@ function NoteDetailView({ id }: { id: string | undefined }) {
                 )}
               </section>
             )}
+
+            <section
+              className="mt-8 border-t border-border pt-6"
+              aria-labelledby="nota-borrar"
+            >
+              <h2 id="nota-borrar" className="text-lg font-semibold">
+                Borrar nota
+              </h2>
+              {!confirmingDeleteNote && (
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  className="mt-3 border-error text-error"
+                  onClick={() => setConfirmingDeleteNote(true)}
+                >
+                  Borrar nota
+                </Button>
+              )}
+              {confirmingDeleteNote && (
+                <div className="mt-3 rounded-md border border-error bg-bg px-4 py-4">
+                  <p className="font-semibold">¿Borrar esta nota?</p>
+                  <p className="mt-1 text-sm text-text-secondary">
+                    Se borrarán la nota, su audio, sus datos, tareas,
+                    borradores y exportaciones.
+                  </p>
+                  <p className="mt-1 text-sm text-text-secondary">
+                    Lo que ya enviaste por WhatsApp o exportaste al CRM
+                    hay que borrarlo allí.
+                  </p>
+                  <p className="mt-1 text-sm text-text-secondary">
+                    Esta acción no se puede deshacer.
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <Button
+                      variant="secondary"
+                      size="lg"
+                      className="border-error text-error"
+                      onClick={() => void handleDeleteNote()}
+                      disabled={deletingNote}
+                    >
+                      {deletingNote ? 'Borrando…' : 'Borrar nota'}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="lg"
+                      onClick={() => setConfirmingDeleteNote(false)}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {deleteNoteError !== null && (
+                <p className="mt-3 text-sm text-error">{deleteNoteError}</p>
+              )}
+            </section>
 
             <div className="mt-8 border-t border-border pt-6">
               <Button asChild size="lg">
