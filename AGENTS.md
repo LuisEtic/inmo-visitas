@@ -70,6 +70,11 @@ Normas del proyecto. Leer antes de tocar código, junto con
   campos de cierre del navegador; «Presupuesto declarado» sin repetir;
   «Exportada» al momento). Cerrada el 2026-11-13 (0011 aplicada,
   Pages `7ac0529`).
-- Fase 8 (siguiente, solo cuando Luis lo pida): seguridad, RLS completa
-  y RGPD.
+- Fase 8: seguridad, borrado y RGPD (tag `v0.8-fase-8`, migración
+  0012, CORS configurable y límite diario de IA en las Edge Functions),
+  revisada por Claude con ajustes (cola de audios, confirmación por
+  nombre, descarga en iPhone). Pendiente de cerrar: Pages desde `main`
+  y prueba de Luis en el móvil.
+- Fase 9 (siguiente, solo cuando Luis lo pida): pulido, móvil y
+  resiliencia (`docs/prompts/PROMPT-FASE-9.md`).
 - Cada pantalla se prueba en el navegador, no solo por API.

@@ -163,7 +163,10 @@ export async function downloadClientData(clientId: string): Promise<string> {
   document.body.appendChild(link)
   link.click()
   link.remove()
-  URL.revokeObjectURL(url)
+  // Revisión de la Fase 8: la URL se libera un poco después. Liberarla
+  // en el mismo instante del clic puede cancelar la descarga en Safari
+  // de iPhone.
+  window.setTimeout(() => URL.revokeObjectURL(url), 10000)
   // La descarga ya se lanzó; si el registro falla, se avisa (el
   // archivo está descargado, pero la acción no quedó registrada).
   const { error: auditError } = await client.from('audit_events').insert({
