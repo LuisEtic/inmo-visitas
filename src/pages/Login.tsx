@@ -166,7 +166,7 @@ export default function Login() {
                 setFormError(null)
                 setErrors({})
               }}
-              className="text-sm font-semibold text-text-primary underline underline-offset-2"
+              className="inline-flex min-h-11 items-center text-sm font-semibold text-text-primary underline underline-offset-2"
             >
               Entrar con enlace mágico
             </button>
@@ -215,7 +215,7 @@ export default function Login() {
                 setInfo(null)
                 setErrors({})
               }}
-              className="text-sm font-semibold text-text-primary underline underline-offset-2"
+              className="inline-flex min-h-11 items-center text-sm font-semibold text-text-primary underline underline-offset-2"
             >
               Entrar con contraseña
             </button>

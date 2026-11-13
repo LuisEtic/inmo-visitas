@@ -254,7 +254,9 @@ function ClientDetailView({ id }: { id: string | undefined }) {
                     setConfirmingDelete(true)
                   }}
                 >
-                  Borrar
+                  {noteCount !== null && noteCount > 0
+                    ? 'Borrar cliente y todos sus datos'
+                    : 'Borrar'}
                 </Button>
               )}
             </div>

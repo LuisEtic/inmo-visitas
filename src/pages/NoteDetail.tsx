@@ -61,6 +61,7 @@ import { clientConfig } from '../config/client'
 import { getCrmAdapter } from '../integrations/crm'
 import type { CrmExportResult } from '../integrations/crm/types'
 import { formatPhone, whatsappHref } from '../lib/contact'
+import { useSlowWait } from '../lib/use-slow-wait'
 import type {
   ClientRow,
   CrmExportRow,
@@ -190,6 +191,11 @@ function NoteDetailView({ id }: { id: string | undefined }) {
   const [followUpError, setFollowUpError] = useState<string | null>(null)
   const [preparing, setPreparing] = useState(false)
   const [prepareError, setPrepareError] = useState<string | null>(null)
+  // Avisos de espera lenta (Fase 9): a los 10 s de espera, cada aviso
+  // añade «Puede tardar hasta un minuto.»; sin reintento automático.
+  const slowTranscribing = useSlowWait(transcribing)
+  const slowExtracting = useSlowWait(extracting)
+  const slowPreparing = useSlowWait(preparing)
   // Destinatario de la última llamada a `drafts` (undefined = los dos
   // borradores y las tareas): «Reintentar» repite esa misma llamada, sin
   // regenerar el otro borrador.
@@ -364,13 +370,16 @@ function NoteDetailView({ id }: { id: string | undefined }) {
     }
   }, [id, supabaseConfigured])
 
-  // URL firmada para el audio (solo si la nota tiene audio).
+  // URL firmada para el audio (solo si la nota tiene audio). Depende
+  // solo de la ruta del audio: si cambia cualquier otro campo de la
+  // nota (p. ej. el estado al aprobar), no se pide otra URL firmada.
+  const audioPath = note?.audio_url ?? null
   useEffect(() => {
-    if (note === null || note.audio_url === null) {
+    if (audioPath === null) {
       return
     }
     let mounted = true
-    getSignedAudioUrl(note.audio_url)
+    getSignedAudioUrl(audioPath)
       .then((url) => {
         if (mounted) {
           setAudioUrl(url)
@@ -385,7 +394,7 @@ function NoteDetailView({ id }: { id: string | undefined }) {
     return () => {
       mounted = false
     }
-  }, [note])
+  }, [audioPath])
 
   // Transcripción automática una sola vez, al abrir una nota `draft`
   // con audio (no en cada render).
@@ -947,10 +956,18 @@ function NoteDetailView({ id }: { id: string | undefined }) {
     setExportResult(null)
     setExportSharedHref(null)
     setCopySummaryNotice(false)
+    // WhatsApp (B-8): la ventana se abre ANTES del await, en el gesto
+    // del usuario, para que el bloqueador de ventanas no la cierre.
+    // Si la exportación falla o no devuelve enlace, se cierra.
+    const whatsappWindow =
+      clientConfig.crmTarget === 'whatsapp'
+        ? window.open('', '_blank', 'noopener')
+        : null
     try {
       const result = await exportToCrm(note.id, clientConfig.crmTarget)
       setExportResult(result)
       if (!result.ok) {
+        whatsappWindow?.close()
         setExportError(result.error ?? 'No se ha podido exportar la ficha.')
         return
       }
@@ -958,11 +975,19 @@ function NoteDetailView({ id }: { id: string | undefined }) {
         // WhatsApp: se abre el enlace devuelto por el adaptador. Si el
         // navegador lo bloquea, queda el enlace en el estado de éxito.
         setExportSharedHref(result.href)
-        window.open(result.href, '_blank', 'noopener')
+        if (whatsappWindow !== null) {
+          whatsappWindow.location.href = result.href
+        } else {
+          window.open(result.href, '_blank', 'noopener')
+        }
+      } else {
+        // Sin enlace no hay nada que abrir: se cierra la ventana en blanco.
+        whatsappWindow?.close()
       }
       showRecordedExport(result.row)
       await refreshExports()
     } catch (error: unknown) {
+      whatsappWindow?.close()
       setExportError(
         error instanceof Error
           ? error.message
@@ -1827,7 +1852,7 @@ function NoteDetailView({ id }: { id: string | undefined }) {
                   Inmueble:{' '}
                   <Link
                     to={`/inmuebles/${property.id}`}
-                    className="font-semibold underline"
+                    className="font-semibold break-words underline"
                   >
                     <span className="font-mono">{property.reference}</span> ·{' '}
                     {property.address}
@@ -1863,7 +1888,10 @@ function NoteDetailView({ id }: { id: string | undefined }) {
                   <p className="mt-3 text-sm text-error">{audioError}</p>
                 )}
                 {transcribing && (
-                  <p className="mt-3 text-sm text-text-secondary">Transcribiendo…</p>
+                  <p className="mt-3 text-sm text-text-secondary">
+                    Transcribiendo…
+                    {slowTranscribing ? ' Puede tardar hasta un minuto.' : ''}
+                  </p>
                 )}
                 {transcribeError !== null && (
                   <div className="mt-3">
@@ -1971,6 +1999,11 @@ function NoteDetailView({ id }: { id: string | undefined }) {
                     >
                       {extracting ? 'Extrayendo…' : 'Extraer datos'}
                     </Button>
+                    {extracting && slowExtracting && (
+                      <p className="mt-3 text-sm text-text-secondary">
+                        Puede tardar hasta un minuto.
+                      </p>
+                    )}
                     {extractError !== null && (
                       <p className="mt-3 text-sm text-error">{extractError}</p>
                     )}
@@ -2177,6 +2210,11 @@ function NoteDetailView({ id }: { id: string | undefined }) {
                           >
                             {extracting ? 'Extrayendo…' : 'Volver a extraer'}
                           </Button>
+                          {extracting && slowExtracting && (
+                            <p className="mt-3 text-sm text-text-secondary">
+                              Puede tardar hasta un minuto.
+                            </p>
+                          )}
                           <Button
                             variant="secondary"
                             size="lg"
@@ -2266,8 +2304,8 @@ function NoteDetailView({ id }: { id: string | undefined }) {
                     </Button>
                     {preparing && (
                       <p className="mt-3 text-sm text-text-secondary">
-                        Preparando borradores y tareas… puede tardar hasta un
-                        minuto.
+                        Preparando borradores y tareas…
+                        {slowPreparing ? ' Puede tardar hasta un minuto.' : ''}
                       </p>
                     )}
                     {prepareError !== null && (

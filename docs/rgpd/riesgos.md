@@ -17,6 +17,29 @@ exportación no sale de Supabase en modo simulado, y en modo webhook
 la llamada real al CRM la hace la función). Queda anotado aquí para
 que no se pierda.
 
+### B-2: escrituras no atómicas en `drafts`
+
+`drafts` guarda borradores y tareas en varias escrituras seguidas
+(borrar los anteriores, insertar los nuevos) sin transacción: si una
+falla a mitad, la función responde 502 con parte ya guardada. **Se
+acepta y no se arregla:** hacerla atómica exigiría una función de
+base de datos, y el fallo no deja datos rotos, solo incompletos —
+«Reintentar» (o volver a preparar el seguimiento) lo arregla. El
+borrador que no pasó los controles no se guarda; el otro, sí.
+
+### B-11: límite diario de IA por función (decisión Fase 9)
+
+El límite diario de IA (150 usos por defecto, secret
+`AI_DAILY_LIMIT`) es **por función** (`transcribe`, `extract`,
+`drafts` por separado), no por agente en total. Luis no ha decidido
+cambiarlo: **se deja como está (opción (a) de la revisión de la Fase
+8)**. No se hace (b) (un solo límite por agente para las tres
+funciones) ni (c) (no contar los usos fallidos: borrar la fila propia
+si el proveedor falla, que exigiría una política de `delete` y, por
+tanto, una migración), y no se crea migración. Si en el piloto un
+agente agota una función pero le quedan usos en otra, se revisará
+entonces.
+
 ## Abiertos
 
 ### Textos libres que nombran a terceros

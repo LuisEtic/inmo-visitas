@@ -132,7 +132,7 @@ export default function Home() {
         </div>
 
         <p className="mt-6 text-sm text-text-secondary">
-          Fase 8 — Seguridad, borrado y RGPD.
+          Fase 9 — Pulido: móvil y resiliencia.
         </p>
       </main>
     </>

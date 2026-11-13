@@ -2,6 +2,11 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { z } from 'npm:zod@4'
 import { allowedOrigins } from './cors.ts'
 import {
+  STALE_PENDING_MESSAGE,
+  stalePendingExports,
+  type PendingExportRow,
+} from './expiry.ts'
+import {
   buildSummary,
   inmovillaPayloadSchema,
   mapToInmovilla,
@@ -42,7 +47,10 @@ import {
  *   respuesta, si viene); otro caso → `error` con un mensaje genérico
  *   en español y la función responde 502.
  * - Cada intento es una fila nueva: reintentar crea otra fila
- *   `pendiente` (el guard no deja cambiar una fila cerrada).
+ *   `pendiente` (el guard no deja cambiar una fila cerrada). Antes de
+ *   insertarla, las propias `pendiente` de esa nota y ese target con
+ *   más de 10 minutos se cierran como `error` con «Sin respuesta
+ *   (interrumpida)» (Fase 9, B-7): son intentos interrumpidos.
  * - Ni el *payload* ni la respuesta del CRM aparecen en los logs ni
  *   en las respuestas de error.
  */
@@ -333,7 +341,29 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: CRM_EXPORT_ERROR }, 502, origin)
   }
 
-  // 5. La fila nace `pendiente` (el guard la exige para este target).
+  // 5. Antes de insertar: las filas propias `pendiente` de esa nota
+  //    y ese target con más de 10 minutos son intentos interrumpidos
+  //    y se cierran como `error` (B-7). Si la limpieza falla, se
+  //    sigue igual: no bloquea el nuevo intento.
+  const { data: pendingRows } = await supabase
+    .from('crm_exports')
+    .select('id, created_at')
+    .eq('visit_note_id', visitNoteId)
+    .eq('target', target)
+    .eq('kind', 'nota')
+    .eq('status', 'pendiente')
+  const stale = stalePendingExports(
+    (pendingRows ?? []) as PendingExportRow[],
+    Date.now(),
+  )
+  for (const staleRow of stale) {
+    await supabase
+      .from('crm_exports')
+      .update({ status: 'error', error_message: STALE_PENDING_MESSAGE })
+      .eq('id', staleRow.id)
+  }
+
+  // 6. La fila nace `pendiente` (el guard la exige para este target).
   const { data: inserted, error: insertError } = await supabase
     .from('crm_exports')
     .insert({
@@ -359,7 +389,7 @@ Deno.serve(async (req: Request) => {
   }
   const row = inserted as ExportRow
 
-  // 6. Modo simulado: sin `CRM_WEBHOOK_URL` no sale nada de Supabase.
+  // 7. Modo simulado: sin `CRM_WEBHOOK_URL` no sale nada de Supabase.
   const webhookUrl = Deno.env.get('CRM_WEBHOOK_URL')
   if (webhookUrl === undefined || webhookUrl === '') {
     const externalId = `SIM-${row.id.slice(0, 8)}`
@@ -379,7 +409,7 @@ Deno.serve(async (req: Request) => {
     return jsonResponse(exportResponse(updated as ExportRow, true, false), 200, origin)
   }
 
-  // 7. Modo webhook: POST con `Idempotency-Key` y firma HMAC opcional.
+  // 8. Modo webhook: POST con `Idempotency-Key` y firma HMAC opcional.
   const webhookSecret = Deno.env.get('CRM_WEBHOOK_SECRET')
   const bodyText = JSON.stringify(payload)
   const headers: Record<string, string> = {

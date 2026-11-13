@@ -4,10 +4,12 @@ import {
   buyerFacts,
   checkPlaceholders,
   confirmsAppointment,
+  containsMoneyFigure,
   factConfirms,
   fillPlaceholders,
   firstName,
   hoursIn,
+  matchesFinanceTerm,
   ownerFacts,
   ownerLeaks,
   parseBuyerResponse,
@@ -234,6 +236,54 @@ describe('ownerLeaks', () => {
   })
 })
 
+describe('falsos positivos B-3 (Fase 9)', () => {
+  it('«Calle 3 Milagros» no es una cifra de dinero; «230 mil» sí', () => {
+    expect(containsMoneyFigure('Calle 3 Milagros')).toBe(false)
+    expect(containsMoneyFigure('Vive en la calle 3 Milagros, 2ºB')).toBe(false)
+    expect(containsMoneyFigure('230 mil')).toBe(true)
+    expect(containsMoneyFigure('230.000 €')).toBe(true)
+    expect(containsMoneyFigure('230000 eur')).toBe(true)
+  })
+
+  it('«la entrada del edificio» no es económica', () => {
+    expect(matchesFinanceTerm('la entrada del edificio')).toBe(false)
+    expect(matchesFinanceTerm('Quedamos en la entrada del portal')).toBe(false)
+  })
+
+  it('«entrada» sí es económica con cifra o con «dar» / «pagar» / «para la» / «tener»', () => {
+    expect(matchesFinanceTerm('tiene la entrada')).toBe(true)
+    expect(matchesFinanceTerm('hay que dar la entrada')).toBe(true)
+    expect(matchesFinanceTerm('quiere pagar la entrada')).toBe(true)
+    expect(matchesFinanceTerm('ahorra para la entrada')).toBe(true)
+    expect(matchesFinanceTerm('entrada de 50.000')).toBe(true)
+    expect(matchesFinanceTerm('la entrada son 50000 euros')).toBe(true)
+  })
+
+  it('los demás términos económicos siguen contando', () => {
+    expect(matchesFinanceTerm('Su presupuesto es alto.')).toBe(true)
+    expect(matchesFinanceTerm('Necesita una hipoteca.')).toBe(true)
+    expect(matchesFinanceTerm('Gastos de comunidad e IBI.')).toBe(false)
+  })
+
+  it('el apellido compartido con el agente no es una filtración', () => {
+    const ctx = {
+      budgetValues: ['230.000 euros'],
+      clientFullName: 'Ana García',
+      agentFullName: 'Luis García',
+    }
+    expect(ownerLeaks('La señora García lo vio.', ctx).leaks).toBe(false)
+    // El nombre de pila del cliente sigue siendo una filtración.
+    expect(ownerLeaks('Ana comentó el ruido.', ctx).leaks).toBe(true)
+    // Sin nombre del agente, el apellido sí cuenta.
+    expect(
+      ownerLeaks('La señora García lo vio.', {
+        budgetValues: ['230.000 euros'],
+        clientFullName: 'Ana García',
+      }).leaks,
+    ).toBe(true)
+  })
+})
+
 describe('confirmsAppointment', () => {
   it('rechaza «queda confirmada la visita del viernes a las 18:00»', () => {
     const result = confirmsAppointment(
@@ -293,6 +343,34 @@ describe('confirmsAppointment', () => {
       confirmsAppointment('Nos vemos el viernes a las 18:00.', factsConfirmed)
         .confirmed,
     ).toBe(false)
+  })
+
+  it('«confirmo» sin visita, cita, día ni hora no confirma nada', () => {
+    expect(
+      confirmsAppointment('Confirmo que el piso me gusta mucho.', FACTS)
+        .confirmed,
+    ).toBe(false)
+    expect(
+      confirmsAppointment(
+        'Confirmo que el piso es bonito, luminoso, amplio, céntrico y la visita me gustó.',
+        FACTS,
+      ).confirmed,
+    ).toBe(false)
+  })
+
+  it('«confirmo» con visita, cita, día u hora en las 6 palabras siguientes sí confirma', () => {
+    expect(
+      confirmsAppointment('Confirmo la visita el viernes.', FACTS).confirmed,
+    ).toBe(true)
+    expect(
+      confirmsAppointment('Confirmo la cita para el lunes.', FACTS).confirmed,
+    ).toBe(true)
+    expect(
+      confirmsAppointment('Confirmamos el miércoles.', FACTS).confirmed,
+    ).toBe(true)
+    expect(
+      confirmsAppointment('Confirmo el día y la hora.', FACTS).confirmed,
+    ).toBe(true)
   })
 })
 

@@ -13,7 +13,10 @@ const buttonVariants = cva(
           'border border-border bg-bg text-text-primary hover:bg-surface',
       },
       size: {
-        default: 'h-10 px-4',
+        // Por defecto 44 px de alto (h-11): objetivo táctil mínimo
+        // en móvil (Fase 9, punto 6). `sm` es solo para filtros con
+        // `min-h-11` explícito; `lg` para acciones principales.
+        default: 'h-11 px-4',
         sm: 'h-8 px-3 text-xs',
         lg: 'h-12 px-6 text-base',
       },

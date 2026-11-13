@@ -57,17 +57,90 @@ export function foldAccents(text: string): string {
     .toLowerCase()
 }
 
-/** Una cifra de dinero: `230.000 €`, `230000 eur`, `230 mil`… */
-export const MONEY_FIGURE_PATTERN = /\d[\d.]*\s*(€|eur|euros|mil)/i
+/**
+ * Una cifra de dinero: `230.000 €`, `230000 eur`, `230 mil`…
+ * «mil» solo como palabra completa: «Calle 3 Milagros» no es dinero.
+ */
+export const MONEY_FIGURE_PATTERN = /\d[\d.]*\s*(€|eur|euros|mil\b)/i
 
 export function containsMoneyFigure(text: string): boolean {
   return MONEY_FIGURE_PATTERN.test(text)
 }
 
+/** Palabras de un texto (minúsculas, sin tildes). */
+function wordsOf(text: string): string[] {
+  return text.split(/[^a-z0-9]+/).filter((word) => word !== '')
+}
+
+/** Formas del verbo «tener» (sin tildes): con ellas, «entrada» es económica. */
+const TENER_FORMS = new Set([
+  'tengo',
+  'tienes',
+  'tiene',
+  'tenemos',
+  'teneis',
+  'tienen',
+  'tenia',
+  'tenias',
+  'teniamos',
+  'teniais',
+  'tenian',
+  'tendre',
+  'tendras',
+  'tendra',
+  'tendremos',
+  'tendreis',
+  'tendran',
+])
+
+/**
+ * «entrada» solo es económica con una cifra o con «dar», «pagar»,
+ * «para la» o una forma de «tener» en las 6 palabras de alrededor:
+ * «la entrada del edificio» no lo es; «tiene la entrada», «dar la
+ * entrada», «para la entrada» o «entrada de 50.000» sí.
+ */
+function mentionsEntradaAsFinance(folded: string): boolean {
+  const words = wordsOf(folded)
+  const hasParaLa = (window: string[]) =>
+    window.some((word, j) => word === 'para' && window[j + 1] === 'la')
+  for (let i = 0; i < words.length; i++) {
+    if (words[i] !== 'entrada') {
+      continue
+    }
+    const before = words.slice(Math.max(0, i - 6), i)
+    const after = words.slice(i + 1, i + 7)
+    const around = [...before, ...after]
+    if (
+      around.some(
+        (word) =>
+          /\d/.test(word) ||
+          word === 'dar' ||
+          word === 'pagar' ||
+          TENER_FORMS.has(word),
+      ) ||
+      hasParaLa(before) ||
+      hasParaLa(after)
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
 /** Un texto contiene alguno de los términos económicos. */
 export function matchesFinanceTerm(text: string): boolean {
   const folded = foldAccents(text)
-  return FINANCE_TERMS.some((term) => folded.includes(foldAccents(term)))
+  // «entrada» va aparte: como palabra suelta («la entrada del
+  // edificio») no es económica; solo con cifra o con «dar»,
+  // «pagar», «para la» o «tener» cerca.
+  if (
+    FINANCE_TERMS.filter((term) => term !== 'entrada').some((term) =>
+      folded.includes(foldAccents(term)),
+    )
+  ) {
+    return true
+  }
+  return mentionsEntradaAsFinance(folded)
 }
 
 /**
@@ -356,7 +429,16 @@ export type OwnerLeakCheck =
  */
 export function ownerLeaks(
   text: string,
-  ctx: { budgetValues: string[]; clientFullName: string },
+  ctx: {
+    budgetValues: string[]
+    clientFullName: string
+    /**
+     * Nombre completo del agente: las partes del nombre del cliente
+     * que también estén en el suyo (un apellido compartido) no
+     * cuentan como filtración.
+     */
+    agentFullName?: string
+  },
 ): OwnerLeakCheck {
   const folded = foldAccents(text)
 
@@ -382,10 +464,16 @@ export function ownerLeaks(
       }
     }
   }
+  const agentParts = new Set(
+    (ctx.agentFullName ?? '')
+      .split(/\s+/)
+      .map((part) => foldAccents(part))
+      .filter((part) => part.length >= 3),
+  )
   const nameParts = ctx.clientFullName
     .split(/\s+/)
     .map((part) => foldAccents(part))
-    .filter((part) => part.length >= 3)
+    .filter((part) => part.length >= 3 && !agentParts.has(part))
   for (const part of nameParts) {
     if (new RegExp(`\\b${part}\\b`).test(folded)) {
       return { leaks: true, reason: 'menciona el nombre del cliente' }
@@ -394,15 +482,56 @@ export function ownerLeaks(
   return { leaks: false }
 }
 
-/** Formas de decir que una cita está confirmada. */
+/** Formas de decir que una cita está confirmada. «confirmo» y
+ * «confirmamos» van aparte: solo cuentan con «visita», «cita»,
+ * «día», «hora» o un día de la semana en las 6 palabras siguientes
+ * (ver `confirmsWithAppointmentWord`). */
 const CONFIRMED_PATTERNS: readonly RegExp[] = [
   /confirmad[oa]/,
-  /confirmo|confirmamos/,
   /queda(mos)? (para|el)/,
   /nos vemos/,
   /te esperamos/,
   /hemos quedado/,
 ]
+
+/** Días de la semana (sin tildes): con ellos, «confirmo» habla de una cita. */
+const WEEKDAYS = [
+  'lunes',
+  'martes',
+  'miercoles',
+  'jueves',
+  'viernes',
+  'sabado',
+  'domingo',
+]
+
+/**
+ * «confirmo» / «confirmamos» solo cuentan si en las 6 palabras
+ * siguientes hay «visita», «cita», «día», «hora» o un día de la
+ * semana: «confirmo la visita el viernes» sí; «confirmo que me
+ * gusta el piso» no.
+ */
+function confirmsWithAppointmentWord(folded: string): boolean {
+  const words = wordsOf(folded)
+  const appointmentWords = new Set([
+    'visita',
+    'cita',
+    'dia',
+    'hora',
+    ...WEEKDAYS,
+  ])
+  for (let i = 0; i < words.length; i++) {
+    if (words[i] !== 'confirmo' && words[i] !== 'confirmamos') {
+      continue
+    }
+    if (
+      words.slice(i + 1, i + 7).some((word) => appointmentWords.has(word))
+    ) {
+      return true
+    }
+  }
+  return false
+}
 
 /**
  * Horas: `18:00`, `18.00`, `18h00`, `18h`, `18 h` y `a las 6`. Se
@@ -472,6 +601,12 @@ export function confirmsAppointment(
         }
       }
     }
+    if (confirmsWithAppointmentWord(folded)) {
+      return {
+        confirmed: true,
+        reason: 'da por confirmada una cita que está pendiente',
+      }
+    }
   }
   const factHours = new Set(
     facts.flatMap((fact) => hoursIn(fact.value).map((hour) => hour.key)),
@@ -531,6 +666,8 @@ export function validateDraft(
     const leak = ownerLeaks(text, {
       budgetValues: ctx.budgetValues,
       clientFullName: ctx.clientFullName,
+      // El nombre del agente es el de la firma (`{agente}`).
+      agentFullName: ctx.placeholders.agente,
     })
     if (leak.leaks) {
       return { ok: false, reason: leak.reason }

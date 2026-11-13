@@ -3066,3 +3066,84 @@ sin cambios en las Edge Functions).**
 - **Pendiente:** criterio 1 (panel Advisors, dashboard), criterio 6
   (JSON descargado) y criterio 13 (navegador a 360 px), revisión de
   Claude.
+
+## HANDOFF FASE 9 — Pulido: móvil y resiliencia (2026-11-13, sin commit, tag ni push: lo hace Argo tras verificar)
+
+- Hecho:
+  - Captura resistente (`src/pages/Capture.tsx`, `src/features/notes/upload.ts` nuevo + `upload.test.ts`): reintento de subida por pasos con función pura `nextUploadStep` (`create-note` → `upload-audio` → `save-audio-url` → `done`); la pantalla recuerda `pendingNoteId`, `uploadedAudioPath` y `audioUrlSaved`, así que «Reintentar subida» se salta lo que ya salió bien (con `upsert: false`, volver a subir una ruta existente falla siempre). Cambiar de cliente/inmueble o pulsar «Volver a grabar» descarta el estado de subida (no se puede pegar un audio a otra nota). Aviso fijo sin conexión (`navigator.onLine` + eventos `online`/`offline`): «Sin conexión. La grabación se guarda en esta pantalla: no la cierres y pulsa Guardar cuando vuelva la conexión.»; Guardar no se desactiva. `beforeunload` mientras haya audio grabado sin guardar o se esté grabando. B-12: «Graba tu resumen al salir de la visita. No grabes al cliente sin su permiso.»
+  - Ficha de la nota (`src/pages/NoteDetail.tsx`, `src/lib/use-slow-wait.ts` nuevo): el efecto de la URL firmada depende solo de `note.audio_url` (antes, de `note` entero). Nuevo hook `useSlowWait(active, 10000)`: a los 10 s de «Transcribiendo…», «Extrayendo…» (párrafo bajo el botón, porque ahí el texto visible es la etiqueta del botón) y «Preparando borradores y tareas…» aparece «Puede tardar hasta un minuto.»; sin reintento automático. B-8: con destino `whatsapp`, `handleExportMain` abre `window.open('', '_blank')` ANTES del `await` y asigna la URL después; si la exportación falla o no devuelve enlace, cierra la ventana en blanco; si `open` devuelve `null`, queda el enlace de respaldo que ya había. «Abrir en WhatsApp» de cada borrador NO cambia: es un `<a href>` nativo sin `await` antes de navegar.
+  - Reglas de `drafts` (`supabase/functions/drafts/rules.ts` + `index.ts`): B-1 — paso 10 ahora es `requiredTasks(buyerData, buyerOutcome?.ok ? buyerOutcome.tasks : [])`: con borrador del comprador a 422 y sin `audience`, las tareas de regla se crean igual. B-3 — `MONEY_FIGURE_PATTERN` con `mil\b` («Calle 3 Milagros» ya no es dinero; «230 mil» sí); `matchesFinanceTerm` trata «entrada» aparte: solo cuenta con cifra o con «dar», «pagar», «para la» o forma de «tener» en las 6 palabras de alrededor («la entrada del edificio» no; «tiene la entrada» sí); `ownerLeaks` acepta `agentFullName` opcional e ignora las partes del nombre del cliente que también estén en el del agente (apellido compartido; `validateDraft` lo saca de `placeholders.agente`, el nombre de la firma); `confirmo`/`confirmamos` solo cuentan con `visita`, `cita`, `día`, `hora` o día de semana en las 6 palabras siguientes (el patrón genérico se quitó de `CONFIRMED_PATTERNS`). B-5 — «No afirmes nada del inmueble, del barrio ni del edificio que no esté en los datos.» en `SYSTEM_PROMPT_BUYER` y `SYSTEM_PROMPT_OWNER`, sin regla nueva. Tests nuevos en `rules.test.ts`: bloque «falsos positivos B-3 (Fase 9)» (5 tests) + 2 en `confirmsAppointment`, cada falso positivo con su contraparte verdadera.
+  - Exportación (`supabase/functions/crm-export/expiry.ts` nuevo + `expiry.test.ts`): B-7 — función pura `stalePendingExports(rows, now)` (`STALE_PENDING_MINUTES = 10`, estrictamente más de 10 minutos; mensaje «Sin respuesta (interrumpida)»); `index.ts` la aplica antes de insertar: las filas propias `pendiente` de esa nota y ese `target` caducadas pasan a `error` (la limpieza es best-effort: si falla, no bloquea el nuevo intento). Pasos 6–8 renumerados (inserción 6, simulado 7, webhook 8).
+  - Restos Fase 8: B-10 — en `/clientes/:id` el botón dice «Borrar cliente y todos sus datos» con notas y «Borrar» sin notas (mientras carga el contador, «Borrar»); el botón interior de confirmación sigue diciendo «Borrar». B-13 — ningún email `example.com` nuevo: los tests y docs nuevos no necesitaban emails ficticios; 0002 e historial del HANDOFF sin tocar. B-2 y B-11 documentados en `docs/rgpd/riesgos.md` (sección Aceptados).
+  - Móvil: botón por defecto de shadcn `h-10` (40 px) → `h-11` (44 px) en `src/components/ui/button.tsx` para cumplir los 44 px del punto 6 en todos los botones sin tamaño explícito (Entrar, Enviar enlace, Guardar perfil…); los dos botones de cambio de modo de `/login` («Entrar con enlace mágico» / «Entrar con contraseña») pasan a `min-h-11`; `break-words` añadido a la dirección del inmueble en `/capturar` y en el enlace de la ficha (igual que en `/inmuebles`).
+  - Docs: `docs/deploy/checklist-mvp.md` nuevo (Etapa 6, estado real: 1, 2, 3 y 5 hechos; 4 parcial — falta Coolify + subdominio + previews por PR; piloto 3–5 usuarios 1–2 semanas pendiente de Luis). `APP_PHASE_LABEL = 'inmo-visitas · Fase 9'`; portada «Fase 9 — Pulido: móvil y resiliencia».
+- Migraciones: ninguna.
+- Edge Functions cambiadas (pendientes de desplegar por Claude, con Verify JWT): `drafts` (B-1, B-3, B-5) y `crm-export` (B-7). `transcribe` y `extract` no cambian. Sin `deno check` (sin Deno en la máquina).
+- Rutas/pantallas cambiadas: `/capturar`, `/notas/:id`, `/clientes/:id`, `/login` (botones), `/` (portada) y el botón base (todas las pantallas con botones de tamaño por defecto).
+- Dependencias nuevas: ninguna de producción.
+- Errores o warnings de build: `npm test` **268/268 en 26 archivos** (base 250/250 + 5 `upload.test.ts` + 6 `expiry.test.ts` + 7 B-3); `npx tsc --noEmit` exit 0, 0 errores; `npm run build` base `/` y `/inmo-visitas/` exit 0; `npm run lint` 0 errores, **2 avisos** (los de shadcn aceptados; los 2 que introdujeron mis primeros cambios — `setState` en efecto en `Capture.tsx` y `use-slow-wait.ts` — se arreglaron reestructurando el código, no silenciándolos); trozo JS mayor `vendor-react` **255,49 kB** (≤ 500 kB). `deno check` no disponible.
+- Resultado del repaso móvil:
+  - Headless a 360×780 (Chrome for Testing 158, Playwright, `vite preview` del build final): `/login`, `/`, `/clientes`, `/capturar`, `/notas`, `/pendientes`, `/perfil` — las 7 redirigen a `/login` (sin sesión) con **scrollWidth 360 = innerWidth 360 (sin desbordamiento), 0 botones < 44 px, 0 errores de consola y 0 peticiones externas** (nada tocó el proyecto real). Captura de `/login` revisada: etiqueta Fase 9, formulario limpio. Antes del arreglo del botón, `/login` tenía 2 botones < 44 px («Entrar» 40 px, «Entrar con enlace mágico» 20 px); tras el arreglo, ninguno.
+  - Estático (pantallas con sesión, sin sesión disponible): botones principales `size="lg"` (48 px), enlaces de navegación y de portada con `min-h-11`, selectores de cliente/inmueble con `min-h-11`, filtros de `/inmuebles` `size="sm"` con `min-h-11`, inputs `min-h-11`; textos de usuario (nombres, emails, direcciones, valores, transcripciones, borradores, tareas) con `break-words`; el `<pre>` de la ficha tiene `overflow-x-auto`. Formularios sin elementos fijos: el botón de guardar va en flujo tras los campos.
+  - Sin comprobar (queda para Luis): las pantallas con sesión a 360 px en navegador real (hace falta sesión de agente); B-8 en Safari real de iPhone (el patrón `window.open` antes del `await` solo se puede verificar allí); instalación PWA desde Chrome en Android (icono y nombre) y actualización automática tras desplegar; que el teclado no tape el botón de guardar en un móvil real.
+- Decisión aplicada en B-11: **opción (a), dejarlo como está** (límite por función, 150 usos por agente y día; un uso cuenta aunque luego falle el proveedor). Luis no ha decidido; no se hace (b) ni (c); sin migración. Documentado en `docs/rgpd/riesgos.md`.
+- Supuestos tomados y decisiones que quedan para Luis:
+  - «entrada»: el prompt no fija ventana para cifra/verbo; se aplica ±6 palabras («junto a» = cercanía), documentado en `rules.ts` y cubierto por tests. Si Luis quiere otra ventana, es un cambio de una línea.
+  - `beforeunload` avisa también mientras se está grabando (`state === 'recording'`), no solo con audio ya grabado: cerrar entonces también pierde la toma.
+  - Botón por defecto a 44 px: es la variante del componente `button.tsx`, no un token de `index.css` (colores/fuentes/radios sin tocar).
+  - Enlaces de texto dentro de frases («Regístrate», «Volver a…») miden ~20 px y se dejan como están; restilarlos como botones es decisión de Luis.
+  - Caso límite del reintento: el estado recordado cubre fallos cuya respuesta llegó; si la respuesta se pierde tras una subida correcta (la subida sí se hizo pero el navegador no lo sabe), el reintento vuelve a subir y da el error de «ya existe» — no hay forma de saberlo sin preguntar a Storage, y el prompt no lo pide.
+  - La skill `app-mvp` no está en este workspace: el checklist se construye con los puntos que nombra el prompt y la evidencia del proyecto.
+  - Quedan para Luis: contraseñas filtradas en Auth, limpieza de datos de prueba (solo con su «sí»), decisiones jurídicas (base legal, textos, proveedor + DPA, plan de pago, plan de Supabase, SMTP), Coolify + subdominio en Hostinger, repo privado (y el historial de git con emails reales), y el piloto (3–5 usuarios, 1–2 semanas).
+- Cómo probarlo (con datos de sacrificio, nunca la nota de Ana; tras desplegar Pages desde `main` y redesplegar `drafts` y `crm-export`):
+  - URL: https://luisetic.github.io/inmo-visitas/ (entrar con el enlace mágico del agente de pruebas).
+  - Criterio 1: grabar una nota, cortar la red justo tras la subida (o forzar el fallo en `setAudioUrl`) y pulsar «Reintentar subida»: la nota se guarda sin error de «ya existe» y se transcribe.
+  - Criterio 2: modo avión en `/capturar`: sale el aviso fijo; la grabación sigue en pantalla; al volver la conexión, Guardar funciona. Cerrar la pestaña con una grabación sin guardar pide confirmación.
+  - Criterio 3: transcribir una nota y mirar la pestaña Red: una sola petición de URL firmada.
+  - Criterio 4: con una llamada lenta (extracción), a los 10 s aparece «Puede tardar hasta un minuto.»
+  - Criterio 5: preparar el seguimiento con un borrador del comprador que no pase las reglas: la tarea «Confirmar día y hora: …» se crea igual.
+  - Criterio 7: dejar una exportación en `pendiente` más de 10 min y exportar de nuevo esa nota a ese destino: la vieja pasa a `error` con «Sin respuesta (interrumpida)».
+  - Criterio 8: en Safari de iPhone, «Compartir ficha por WhatsApp» abre WhatsApp o deja el enlace de respaldo.
+  - Criterio 10: recorrer a 360 px `/login`, `/`, `/capturar`, `/clientes`, `/clientes/:id`, `/inmuebles`, `/inmuebles/:id`, `/notas`, `/notas/:id` (en sus estados), `/pendientes`, `/perfil` y `/perfil/acciones`.
+
+### Verificación independiente de Argo (2026-11-13)
+
+- Tests **268/268 en 26 archivos**, `npx tsc --noEmit` exit 0 (0
+  errores), `npm run build` en base `/` y `/inmo-visitas/` exit 0,
+  `npm run lint` 0 errores y 2 avisos de shadcn, trozo mayor
+  `vendor-react` 255,49 kB. Todo verificado por Argo con sus propias
+  ejecuciones, no solo con el informe del constructor.
+- `git status`: 13 modificados + 6 nuevos, HEAD sigue en `50c948d`;
+  **ninguna migración nueva**; sin dependencias nuevas de
+  producción; sin `service_role` ni `any` en el diff.
+- Leído el diff de los cambios de reglas y funciones: B-1
+  (`requiredTasks` con `[]` si el borrador da 422), B-3 (los 4 casos:
+  `mil\b`, «entrada» ±6 palabras con cifra/dar/pagar/para la/tener,
+  apellido compartido con el agente, «confirmo» con palabra de cita
+  en las 6 siguientes), B-5 (frase en los dos `SYSTEM_PROMPT`), B-7
+  (filas propias `pendiente` > 10 min a `error` antes de insertar,
+  best-effort), B-8 (`window.open` antes del `await` en
+  `handleExportMain`; «Abrir en WhatsApp» de cada borrador es un
+  `<a href>` nativo, sin cambio), URL firmada con dependencia solo
+  en `audio_url`, `useSlowWait` a 10 s, reintento por pasos con
+  `nextUploadStep`, aviso offline y `beforeunload`. Todo conforme al
+  prompt.
+- **Una corrección de Argo en `docs/rgpd/riesgos.md`:** la opción
+  (c) de B-11 estaba mal descrita («un límite global por agente y
+  día»); es «no contar los usos fallidos» (borrar la fila propia si
+  el proveedor falla, con política de `delete` y migración). Texto
+  corregido.
+- **Dos cosas para la revisión de Claude (no bloquean):** (1) el
+  botón por defecto pasa de 40 a 44 px en toda la app
+  (`button.tsx`): cumple el criterio 10, pero es un cambio global
+  de la variante, no solo de las pantallas que lo necesitaban.
+  (2) Límite conocido del reintento, documentado por el
+  constructor: si la respuesta se pierde tras una subida correcta
+  (la API de Supabase pierde respuestas; visto en la Fase 8), el
+  reintento vuelve a subir y da «ya existe». El criterio 1 del
+  prompt inyecta el fallo después de que la subida devuelva
+  (falla `setAudioUrl`), caso que sí cubre el diseño.
+- Pendiente: commit + tag `v0.9-fase-9` + push (token de Luis),
+  desplegar `drafts` y `crm-export` por Claude desde `main`, Pages,
+  criterios 1–5, 7, 8 y 10 en navegador/móvil real con Luis, y
+  revisión de Claude.

@@ -18,6 +18,10 @@ import {
   setAudioUrl,
   uploadAudio,
 } from '../features/notes/api'
+import {
+  nextUploadStep,
+  type UploadStepState,
+} from '../features/notes/upload'
 import { formatPhone } from '../lib/contact'
 import type { ClientRow, PropertyRow } from '../lib/database.types'
 import { useAuth } from '../lib/auth-context'
@@ -73,6 +77,58 @@ export default function Capture() {
   // Nota en `draft` ya creada para el audio: el reintento de subida
   // reutiliza su id (no se crea una segunda nota).
   const [pendingNoteId, setPendingNoteId] = useState<string | null>(null)
+  // Ruta del audio ya subido y si `audio_url` ya se guardó: el
+  // reintento se salta la subida si solo falló lo siguiente (Fase 9).
+  const [uploadedAudioPath, setUploadedAudioPath] = useState<string | null>(null)
+  const [audioUrlSaved, setAudioUrlSaved] = useState(false)
+  // Sin conexión: `navigator.onLine` al entrar y eventos `online` /
+  // `offline` después. El aviso no desactiva Guardar.
+  const [isOffline, setIsOffline] = useState(
+    () => typeof navigator !== 'undefined' && !navigator.onLine,
+  )
+
+  // Cambiar de cliente o inmueble descarta el estado de subida de un
+  // intento anterior: esa nota en `draft` ya no vale para la nueva
+  // selección. Se hace en el gesto que cambia la selección, no en un
+  // efecto.
+  const selectClient = (client: ClientRow) => {
+    setSelectedClient(client)
+    setPendingNoteId(null)
+    setUploadedAudioPath(null)
+    setAudioUrlSaved(false)
+  }
+  const selectProperty = (property: PropertyRow) => {
+    setSelectedProperty(property)
+    setPendingNoteId(null)
+    setUploadedAudioPath(null)
+    setAudioUrlSaved(false)
+  }
+
+  useEffect(() => {
+    const goOffline = () => setIsOffline(true)
+    const goOnline = () => setIsOffline(false)
+    window.addEventListener('offline', goOffline)
+    window.addEventListener('online', goOnline)
+    return () => {
+      window.removeEventListener('offline', goOffline)
+      window.removeEventListener('online', goOnline)
+    }
+  }, [])
+
+  // Salir con una grabación sin guardar (o grabando) pide
+  // confirmación con el aviso estándar del navegador.
+  const hasUnsavedRecording =
+    recorder.blob !== null || recorder.state === 'recording'
+  useEffect(() => {
+    if (!hasUnsavedRecording) {
+      return
+    }
+    const handler = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [hasUnsavedRecording])
 
   useEffect(() => {
     if (!supabaseConfigured) {
@@ -149,6 +205,9 @@ export default function Capture() {
         [...previous, created].sort((a, b) => a.full_name.localeCompare(b.full_name)),
       )
       setSelectedClient(created)
+      setPendingNoteId(null)
+      setUploadedAudioPath(null)
+      setAudioUrlSaved(false)
       setShowProvisional(false)
       setProvisionalName('')
       setProvisionalPhone('')
@@ -186,6 +245,17 @@ export default function Capture() {
     }
   }
 
+  /**
+   * Subida de voz en pasos, con reintento que se salta lo que ya salió
+   * bien (Fase 9):
+   * 1. Crear la nota en `draft` (solo si aún no existe).
+   * 2. Subir el audio a Storage (`upsert: false`).
+   * 3. Guardar `audio_url` en la nota.
+   * El estado de cada paso se recuerda en `pendingNoteId`,
+   * `uploadedAudioPath` y `audioUrlSaved`, así que «Reintentar subida»
+   * repite solo el paso que falló. No hay reintento automático: el
+   * agente decide si pulsa «Reintentar subida».
+   */
   async function handleSaveAudio() {
     if (
       selectedClient === null ||
@@ -204,29 +274,61 @@ export default function Capture() {
     setSaveError(null)
     setUploadError(null)
     setSaving(true)
-    let noteId = pendingNoteId
+    const state: UploadStepState = {
+      noteId: pendingNoteId,
+      uploadedPath: uploadedAudioPath,
+      audioUrlSaved,
+    }
     try {
-      if (noteId === null) {
-        const note = await createAudioDraftNote(selectedClient.id, selectedProperty.id)
-        noteId = note.id
-        setPendingNoteId(noteId)
+      const step = nextUploadStep(state)
+      if (step.step === 'create-note') {
+        const note = await createAudioDraftNote(
+          selectedClient.id,
+          selectedProperty.id,
+        )
+        state.noteId = note.id
+        setPendingNoteId(note.id)
+      }
+      const uploadStep = nextUploadStep(state)
+      if (uploadStep.step === 'upload-audio') {
+        // La subida es a Storage (`upsert: false`): si la ruta ya
+        // existe falla, por eso solo se sube cuando aún no se subió.
+        const path = await uploadAudio(
+          user.id,
+          uploadStep.noteId,
+          recorder.blob,
+          extension,
+        )
+        state.uploadedPath = path
+        setUploadedAudioPath(path)
+      }
+      const saveStep = nextUploadStep(state)
+      if (saveStep.step === 'save-audio-url') {
+        await setAudioUrl(saveStep.noteId, saveStep.path)
+        state.audioUrlSaved = true
+        setAudioUrlSaved(true)
+      }
+      const done = nextUploadStep(state)
+      if (done.step === 'done') {
+        navigate(`/notas/${done.noteId}`)
       }
     } catch (error: unknown) {
-      setSaveError(error instanceof Error ? error.message : 'Ha ocurrido un error.')
+      // El paso que falló se deduce del estado recordado: si la nota
+      // aún no se creó, el fallo fue al crearla; si ya existe, fue en
+      // la subida o al guardar `audio_url`.
+      if (state.noteId === null) {
+        setSaveError(
+          error instanceof Error ? error.message : 'Ha ocurrido un error.',
+        )
+      } else {
+        setUploadError(
+          error instanceof Error ? error.message : 'Ha ocurrido un error.',
+        )
+      }
       setSaving(false)
       return
     }
-    try {
-      const path = await uploadAudio(user.id, noteId, recorder.blob, extension)
-      await setAudioUrl(noteId, path)
-    } catch (error: unknown) {
-      setUploadError(
-        error instanceof Error ? error.message : 'Ha ocurrido un error.',
-      )
-      setSaving(false)
-      return
-    }
-    navigate(`/notas/${noteId}`)
+    setSaving(false)
   }
 
   const textValidation = validateNoteText(text)
@@ -247,6 +349,16 @@ export default function Capture() {
         <p className="mt-1 text-sm text-text-secondary">
           Elige cliente e inmueble y deja la nota por voz o por texto.
         </p>
+
+        {isOffline && (
+          <p
+            role="status"
+            className="mt-6 rounded-md border border-border bg-surface px-4 py-3 text-sm"
+          >
+            Sin conexión. La grabación se guarda en esta pantalla: no la
+            cierres y pulsa Guardar cuando vuelva la conexión.
+          </p>
+        )}
 
         {!supabaseConfigured && (
           <div className="mt-6">
@@ -280,7 +392,7 @@ export default function Capture() {
                     <li key={client.id}>
                       <button
                         type="button"
-                        onClick={() => setSelectedClient(client)}
+                        onClick={() => selectClient(client)}
                         aria-pressed={selected}
                         className={`block min-h-11 w-full rounded-md border px-4 py-3 text-left ${
                           selected
@@ -405,7 +517,7 @@ export default function Capture() {
                     <li key={property.id}>
                       <button
                         type="button"
-                        onClick={() => setSelectedProperty(property)}
+                        onClick={() => selectProperty(property)}
                         aria-pressed={selected}
                         className={`block min-h-11 w-full rounded-md border px-4 py-3 text-left ${
                           selected
@@ -422,7 +534,7 @@ export default function Capture() {
                           </Badge>
                           {selected && <Badge variant="neutral">Seleccionado</Badge>}
                         </span>
-                        <span className="mt-1 block text-sm text-text-secondary">
+                        <span className="mt-1 block break-words text-sm text-text-secondary">
                           {property.address}, {property.city}
                         </span>
                       </button>
@@ -467,8 +579,8 @@ export default function Capture() {
               {tab === 'voice' && voiceSupported && (
                 <div className="mt-4">
                   <p className="rounded-md border border-border bg-surface px-4 py-3 text-sm">
-                    Graba tu resumen al salir de la visita, no la conversación
-                    con el cliente.
+                    Graba tu resumen al salir de la visita. No grabes al
+                    cliente sin su permiso.
                   </p>
                   {recorder.state === 'idle' && (
                     <Button size="lg" className="mt-4" onClick={() => void recorder.start()}>
@@ -493,7 +605,20 @@ export default function Capture() {
                     <div className="mt-4">
                       <audio controls src={blobUrl} className="w-full" />
                       <div className="mt-3 flex flex-wrap gap-3">
-                        <Button variant="secondary" size="lg" onClick={recorder.reset}>
+                        <Button
+                          variant="secondary"
+                          size="lg"
+                          onClick={() => {
+                            // Una grabación nueva no pertenece a la nota
+                            // en `draft` de un intento anterior.
+                            recorder.reset()
+                            setPendingNoteId(null)
+                            setUploadedAudioPath(null)
+                            setAudioUrlSaved(false)
+                            setSaveError(null)
+                            setUploadError(null)
+                          }}
+                        >
                           Volver a grabar
                         </Button>
                       </div>

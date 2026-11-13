@@ -77,6 +77,7 @@ const SYSTEM_PROMPT_BUYER =
   'Si hay una cita pendiente, NUNCA la des por confirmada: propón confirmarla y pregunta qué falta (por ejemplo, la hora). ' +
   'No menciones el presupuesto ni la financiación. ' +
   'No inventes ningún dato. ' +
+  'No afirmes nada del inmueble, del barrio ni del edificio que no esté en los datos. ' +
   'Devuelve SOLO un objeto JSON {"draft": "...", "tasks": [{"description": "...", "fact_index": n}]} ' +
   'con las tareas que el agente debería hacer a partir de los datos (máximo 10, descripción breve de 3 a 200 caracteres, fact_index es la posición del dato en la lista enviada, empezando en 0).'
 
@@ -90,6 +91,7 @@ const SYSTEM_PROMPT_OWNER =
   'No menciones el presupuesto, ofertas ni la situación económica del comprador. ' +
   'Si hay una cita pendiente, NUNCA la des por confirmada. ' +
   'No inventes ningún dato. ' +
+  'No afirmes nada del inmueble, del barrio ni del edificio que no esté en los datos. ' +
   'Devuelve SOLO un objeto JSON {"draft": "..."}.'
 
 const bodySchema = z.object({
@@ -506,12 +508,19 @@ Deno.serve(async (req: Request) => {
   }
 
   // 10. Tareas definitivas (solo sin `audience`): las de la IA más
-  //     las de regla que falten.
+  //     las de regla que falten. Si el borrador del comprador dio
+  //     422, las tareas de regla se generan igual (sin las de la IA):
+  //     las citas pendientes necesitan su tarea aunque el borrador
+  //     no pasara los controles.
   const buyerOutcome = outcomes[audiences.indexOf('comprador')]
-  const tasks =
-    wantTasks && buyerOutcome !== undefined && buyerOutcome.ok
-      ? requiredTasks(buyerData, buyerOutcome.tasks)
-      : []
+  const tasks = wantTasks
+    ? requiredTasks(
+        buyerData,
+        buyerOutcome !== undefined && buyerOutcome.ok
+          ? buyerOutcome.tasks
+          : [],
+      )
+    : []
   const tasksByRule = tasks.filter((task) => task.origin === 'regla').length
 
   // 11. Guardar lo que pasó. El borrador que falló las reglas no se
