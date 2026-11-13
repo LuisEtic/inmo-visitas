@@ -3331,3 +3331,7 @@ PR: R-4 no cambia el JavaScript de `drafts`.
   Luis: **opción (a)**, se prueba en el piloto con el primer agente que
   tenga iPhone; queda como riesgo abierto en `docs/ESTADO.md`.
 - **Fase 9 cerrada.**
+- **Fase 8 cerrada** el mismo día: Luis comprueba en Android, con datos
+  de sacrificio, «Descargar sus datos», «Borrar nota», «Borrar cliente y
+  todos sus datos» y que el audio se borra al aprobar una nota. **MVP
+  terminado (Fases 1–9 cerradas).**
