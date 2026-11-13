@@ -2448,3 +2448,13 @@ siguientes. Hechos con el conector de Supabase (proyecto
 del todo y reabrirla; en la nota de Ana, Exportar → «Vista previa de la
 ficha» debe decir «Presupuesto declarado: 230.000 euros»; «Copiar
 ficha» → «Exportada: sí» al momento. Con eso, la Fase 7 queda cerrada.
+
+**Prueba de Luis en el móvil (2026-11-13, 10:47):** en la nota aprobada
+de Ana (`e0782f7c…`, 11/11 17:22), «Vista previa de la ficha» muestra
+«Presupuesto declarado» y «Copiar ficha» muestra «Ficha copiada»; la
+base registra la fila `manual`/`nota`/`entregado` a las 10:47:52. El
+paso de «Exportada: no» a «sí» no se pudo ver porque esa nota ya estaba
+exportada (copia de las 9:57); queda cubierto por la prueba de la
+revisión (navegador simulado con la recarga caída). Observación: Ana
+tiene 8 notas con V-18 y solo una aprobada; las otras siete son de
+prueba y se limpiarán antes del piloto. **Fase 7 cerrada.**

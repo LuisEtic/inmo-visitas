@@ -68,8 +68,8 @@ Normas del proyecto. Leer antes de tocar código, junto con
   0010 y 0011, Edge Function `crm-export`, formato propio y modo
   simulado), revisada por Claude con ajustes (0011: el insert no acepta
   campos de cierre del navegador; «Presupuesto declarado» sin repetir;
-  «Exportada» al momento). Se cierra tras aplicar la 0011, redesplegar
-  `crm-export` v2 y Pages.
+  «Exportada» al momento). Cerrada el 2026-11-13 (0011 aplicada,
+  Pages `7ac0529`).
 - Fase 8 (siguiente, solo cuando Luis lo pida): seguridad, RLS completa
   y RGPD.
 - Cada pantalla se prueba en el navegador, no solo por API.
