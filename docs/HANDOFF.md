@@ -2847,3 +2847,106 @@ sacrificio (criterios del prompt, punto 8).
   sacrificio (hacen falta las contraseñas de los agentes de prueba,
   que Luis pasa transitoriamente), redespliegue de las 4 funciones
   por Luis, prueba en navegador y Pages.
+
+### Revisión de Claude (2026-11-13, Claude Code)
+
+**Resultado: OK con 3 ajustes pequeños de interfaz (sin migración nueva y
+sin cambios en las Edge Functions).**
+
+**Comprobaciones:**
+
+- `npm ci`, `tsc -b --noEmit` (0 errores, código de salida comprobado),
+  `npm run lint` (2 avisos de shadcn aceptados, 0 errores), `npm test`
+  **243/243 → 250/250** (7 nuevos), `npm run build` en base `/` y
+  `/inmo-visitas/` sin errores; trozo mayor `vendor-react` 255 kB.
+- **0001–0012 en PostgreSQL 16 temporal** con `auth`/`storage`
+  simulados y `rls_auto_enable()` de stub (la crea Supabase, como
+  apuntó Muse): todo se aplica; la **0012 aplicada dos veces** no da
+  error (idempotente); copia de `docs/deploy/supabase-fase-8.sql`
+  idéntica (`cmp`); teléfonos de la semilla normalizados.
+- **Prueba negativa de RLS y criterios en PostgreSQL: 26/26 + 1**
+  con dos agentes de sacrificio: B no ve clientes, notas, cola,
+  registro ni `ai_calls` de A; `erase_client` y
+  `erase_property_owner` de A como B → `no_encontrado`; B no borra la
+  nota de A ni vacía su cola; B no inserta en la cola, el registro ni
+  `ai_calls` a nombre de A (`42501`); `update`/`delete` en
+  `ai_calls`/`audit_events` y `update` en `audio_cleanup` → 0 filas;
+  B-4 (`visit_note_id`, `origin`, `audience`) → `cambio_no_permitido`;
+  B-9 (`external_id` de 201) → `23514`; `612 34 56 78` y email con
+  mayúsculas → `23514`; aprobar con audio → `audio_url` nulo y ruta en
+  la cola; `erase_client` → todo borrado, 2 audios en cola,
+  `cliente_borrado` + 2 `nota_borrada`; `anon` no ejecuta
+  `erase_client`; `handle_new_agent()`/`rls_auto_enable()` no
+  ejecutables; `search_path` fijo en las 10 funciones;
+  `demo_seed_claim` retirada. **Extra:** `erase_client` con un
+  borrador **aprobado** y una exportación **enviada** también lo borra
+  todo (las guardas lo permiten en cascada).
+- **Proyecto real** (`inmo-visitas-pruebas`): *Advisors* de seguridad
+  solo con `auth_leaked_password_protection` (ajuste de Auth de Luis);
+  cola `audio_cleanup` vacía y **0 audios huérfanos** en `visit-audio`.
+  Las 4 funciones desplegadas por Claude con el conector (transcribe
+  v16, extract v18, drafts v9, crm-export v7, Verify JWT activado) y
+  probadas por Luis en Pages (transcribir, extraer, borradores). Límite
+  diario probado por Muse (429 a los 2 y a los 4 usos con
+  `AI_DAILY_LIMIT` bajo); el *secret* ya no existe (150 por defecto) y
+  tampoco `ALLOWED_ORIGINS`.
+- **Navegador a 360 px con Supabase simulado: 14/14** (`/clientes/:id`
+  con 3 notas, `/perfil`, `/perfil/acciones`): la confirmación cuenta
+  las notas y avisa de WhatsApp/CRM, el botón exige el nombre y llama a
+  `rpc/erase_client`, vuelve a `/clientes`; sin desbordamiento ni
+  errores de consola.
+- `git grep` de claves: sin resultados (solo menciones en docs).
+  Pages ya sirve la Fase 8 (`gh-pages` `a4c272e`).
+- **No hecho:** `deno check` (no hay Deno en esta máquina y no se pudo
+  instalar). Lo compensa que las 4 funciones ya corren en el proyecto
+  real sin errores de arranque.
+
+**Ajustes de este PR:**
+
+- **M-1 · Cola de audios:** `flushAudioCleanup` daba por hecho que
+  `storage.remove` lista también las rutas que ya no existían. No es
+  así: devuelve solo lo que borra (lo dice la documentación de
+  `storage-js` 2.119, con el ejemplo `"data": []`). Una ruta cuyo
+  objeto ya no existiera se quedaba en la cola para siempre, contra el
+  prompt. Ahora, para las rutas que `remove` no lista, se pregunta con
+  `exists()` y la fila se va solo si Storage responde que no existe; si
+  existe o la comprobación falla, se queda. Tests: el de «ya no existe»
+  imitaba el comportamiento equivocado y se ha corregido; +1 test
+  (fallo de `exists`).
+- **M-2 · Confirmación por nombre** (`/clientes/:id`): el teclado del
+  móvil suele añadir un espacio al final o poner mayúscula, y el botón
+  no se activaba. `matchesConfirmName` (`src/features/privacy/
+  confirm.ts`, 6 tests) ignora espacios de los extremos, espacios
+  repetidos y mayúsculas; las tildes sí cuentan.
+- **M-3 · «Descargar sus datos»:** la URL del archivo se liberaba en el
+  mismo instante del clic, lo que puede cancelar la descarga en Safari
+  de iPhone. Ahora se libera a los 10 s.
+
+**Aplazados (baja, Fase 9):**
+
+- **B-10:** el botón dice «Borrar»; el prompt pedía «Borrar cliente y
+  todos sus datos» cuando hay notas. La confirmación ya lo explica.
+- **B-11 — (decide Luis):** el límite cuenta **por función** (150 en
+  transcribe, 150 en extract y 150 en drafts por agente y día), y el
+  prompt decía «por agente». Además, un uso cuenta aunque luego falle
+  el proveedor (el 502 de la prueba de Muse). Las dos cosas son
+  defendibles; hay que decidirlas.
+- **B-12:** el aviso de `/capturar` («Graba tu resumen al salir de la
+  visita, no la conversación con el cliente.») no menciona el permiso
+  del cliente, que pedía el prompt; y solo se ve con la pestaña de voz.
+- **B-13:** `ana.garcia@gmail.com` (semilla y HANDOFF) es ficticio,
+  pero `gmail.com` es un dominio real: mejor `example.com` en datos
+  nuevos (la 0002 no se toca).
+
+**Pendiente tras fusionar este PR:**
+
+- Desplegar Pages desde `main` (cambian `ClientDetail` y la descarga).
+- Prueba de Luis en el móvil, con datos de sacrificio: «Descargar sus
+  datos» (sobre todo en iPhone), «Borrar cliente y todos sus datos»
+  escribiendo el nombre en minúsculas, «Borrar nota» de una nota con
+  audio y aprobar una nota con audio (el reproductor desaparece).
+  En el proyecto real hay registros de borrados (de Argo), pero ninguno
+  de `datos_entregados`: la descarga no se ha probado en vivo.
+- Luis: activar la protección de contraseñas filtradas en Auth si el
+  plan lo permite. La limpieza de datos de prueba sigue esperando su
+  «sí».

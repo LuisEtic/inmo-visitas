@@ -10,9 +10,11 @@ import { supabase } from '../../lib/supabase'
  *
  * - En lotes de 50 rutas por llamada a `storage.remove`.
  * - Solo se borran de la cola las filas cuyo objeto se borró o ya no
- *   existía (la respuesta de `remove` las lista en ambos casos: el
- *   borrado en Storage es idempotente). Las filas de un lote fallido
- *   se quedan para la próxima vez.
+ *   existía. `remove` lista solo los objetos que borró de verdad (si
+ *   la ruta ya no existía, no la lista): para esas rutas se pregunta
+ *   a Storage con `exists` y la fila se va solo si responde que no
+ *   existe (revisión de la Fase 8). Las filas de un lote fallido, o
+ *   cuya comprobación falla, se quedan para la próxima vez.
  * - Nunca lanza: si algo falla, se reintenta en la próxima llamada
  *   (al iniciar sesión, tras aprobar una nota o tras cada borrado).
  */
@@ -53,6 +55,23 @@ export async function flushAudioCleanup(): Promise<void> {
       const doneIds = batch
         .filter((row) => removedNames.has(row.path))
         .map((row) => row.id)
+      // Rutas que `remove` no listó: si el objeto ya no existe, la fila
+      // también se va; si existe o la comprobación falla, se queda.
+      for (const row of batch) {
+        if (removedNames.has(row.path)) {
+          continue
+        }
+        try {
+          const { data: stillExists } = await supabase.storage
+            .from(AUDIO_BUCKET)
+            .exists(row.path)
+          if (stillExists === false) {
+            doneIds.push(row.id)
+          }
+        } catch {
+          // Se queda para la próxima vez.
+        }
+      }
       if (doneIds.length === 0) {
         continue
       }

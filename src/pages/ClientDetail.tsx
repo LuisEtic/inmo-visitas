@@ -21,6 +21,7 @@ import {
   eraseClient,
 } from '../features/privacy/api'
 import type { ClientFormValues } from '../features/clients/schema'
+import { matchesConfirmName } from '../features/privacy/confirm'
 import { APP_PHASE_LABEL } from '../lib/app-label'
 
 /**
@@ -320,7 +321,8 @@ function ClientDetailView({ id }: { id: string | undefined }) {
                     disabled={
                       deleting ||
                       noteCount === null ||
-                      (noteCount > 0 && confirmName !== client.full_name)
+                      (noteCount > 0 &&
+                        !matchesConfirmName(confirmName, client.full_name))
                     }
                   >
                     {deleting ? 'Borrando…' : 'Borrar'}
