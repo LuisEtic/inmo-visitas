@@ -4,6 +4,12 @@
 > reales.** Los puntos marcados «(decide Luis)» están pendientes de su
 > decisión; nada de este documento es asesoramiento legal.
 
+> **Revisión 2026-11-13 (Etapa 6):** probablemente Luis/Leytonia es
+> **encargado** (art. 28) de las notas de visita y la agencia es la
+> responsable; Luis solo es responsable de las cuentas de agente. Ver
+> `decisiones-piloto.md`, punto 2. Este registro se rehace cuando Luis
+> lo decida.
+
 ## Responsable
 
 - **Responsable:** Luis (autónomo, formador y consultor de IA).

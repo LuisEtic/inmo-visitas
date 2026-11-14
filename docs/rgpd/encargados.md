@@ -9,12 +9,17 @@
 | Encargado | Servicio | Datos que trata | Ubicación | DPA firmado |
 | --- | --- | --- | --- | --- |
 | Supabase | Auth, base de datos (Postgres), Storage y Edge Functions | Todos los de la app (clientes, propietarios, notas, audios, tareas, borradores, exportaciones, registro de acciones) | UE (proyecto de pruebas: eu-central-1) | comprobar |
-| Groq | Transcripción de voz (`transcribe`) | Audio de la nota y su transcripción | Fuera de la UE (comprobar) | comprobar |
+| Groq | Transcripción de voz (`transcribe`) | Audio de la nota y su transcripción | EE. UU. (Google Cloud), cláusulas tipo; ZDR disponible (comprobado 2026-11-13, `decisiones-piloto.md`) | comprobar |
 | Google (Gemini) | Extracción de datos y borradores (`extract`, `drafts`) | Solo el texto de la nota (extracción) o categoría, nombre y valor de los datos no descartados más la referencia del inmueble (borradores) | Fuera de la UE (comprobar) | comprobar |
 | GitHub Pages | Alojamiento de la app (staging temporal) | Ninguno (la app es estática; los datos viven en Supabase) | Fuera de la UE (comprobar) | comprobar |
 | Hostinger / Coolify | Alojamiento de la app (producción prevista) | Ninguno (la app es estática; los datos viven en Supabase) | comprobar | comprobar |
 
 ## Notas
+
+- **Revisión 2026-11-13:** la cuota gratuita de Gemini **no se puede
+  usar** para usuarios del EEE; hay que activar la facturación antes
+  de enseñar la app a un agente. Opciones de proveedor (A: Google de
+  pago + Groq con ZDR; B: Mistral en la UE) en `decisiones-piloto.md`.
 
 - **Proveedor de IA definitivo y plan de pago: (decide Luis).** En
   pruebas se usan los planes gratuitos de Groq y Gemini; antes del
